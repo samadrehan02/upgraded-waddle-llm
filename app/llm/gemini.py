@@ -129,5 +129,4 @@ ALLOWED JSON SCHEMA (EXACT):
     return {
         "model": settings.GEMINI_MODEL,
         "data": parsed,
-        "sanitized": sanitized,
     }
