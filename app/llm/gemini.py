@@ -68,7 +68,6 @@ ALLOWED JSON SCHEMA (EXACT):
       "index": 1,
       "speaker": "patient | doctor | unknown",
       "text": "string",
-      "confidence": 0.0
     }}
   ],
   "symptoms": [

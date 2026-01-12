@@ -2,7 +2,7 @@ from typing import List, Literal, TypedDict
 
 
 class TranscriptLine(TypedDict):
-    speaker: Literal["patient", "doctor"]
+    speaker: Literal["patient", "doctor", "unknown"]
     text: str
     timestamp: str
 
