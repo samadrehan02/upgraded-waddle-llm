@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Transcription - Hindi</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <!-- Header with better hierarchy -->
+        <header>
+            <div class="header-content">
+                <div class="header-icon">
+                    <span class="material-icons">mic</span>
+                </div>
+                <div class="header-text">
+                    <h1>Medical Transcription</h1>
+                    <p>Real-time Hindi speech-to-text for clinical documentation</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Control panel with status indicator -->
+        <div class="control-panel">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Ready to start</span>
+            </div>
+            <div class="controls">
+                <button id="startBtn" class="btn-primary">
+                    <span class="material-icons">fiber_manual_record</span>
+                    Start Recording
+                </button>
+                <button id="stopBtn" class="btn-danger" disabled>
+                    <span class="material-icons">stop</span>
+                    Stop & Generate Report
+                </button>
+            </div>
+        </div>
+
+        <!-- Main content grid -->
+        <div class="panels">
+            <!-- Live Transcript Panel -->
+            <div class="panel panel-primary">
+                <div class="panel-header">
+                    <span class="material-icons">article</span>
+                    <h2>Live Transcript</h2>
+                    <span class="panel-badge" id="transcriptCount">0 lines</span>
+                </div>
+                <div class="scroll-box" id="transcript">
+                    <div class="empty-state">
+                        <span class="material-icons">mic_none</span>
+                        <p>Transcript will appear here as you speak</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Structured Data Panel -->
+            <div class="panel panel-secondary">
+                <div class="panel-header">
+                    <span class="material-icons">data_object</span>
+                    <h2>Structured Data</h2>
+                </div>
+                <div class="scroll-box code" id="structured">
+                    <div class="empty-state">
+                        <span class="material-icons">psychology</span>
+                        <p>Extracted clinical data will appear after stopping</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OPD Note Panel - Full width -->
+            <div class="panel panel-highlight panel-full">
+                <div class="panel-header">
+                    <span class="material-icons">description</span>
+                    <h2>Generated OPD Note</h2>
+                    <button class="btn-icon" id="copyBtn" title="Copy to clipboard" style="display:none;">
+                        <span class="material-icons">content_copy</span>
+                    </button>
+                </div>
+                <div class="scroll-box opd-note" id="llmReport">
+                    <div class="empty-state">
+                        <span class="material-icons">note_add</span>
+                        <p>Formatted clinical note will be generated after consultation</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
