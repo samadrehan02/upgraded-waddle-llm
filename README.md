@@ -113,9 +113,6 @@ This transcript:
 **File**
 app/llm/gemini.py
 
-markdown
-Copy code
-
 **Role**  
 Parse the raw transcript into structured clinical data.
 
@@ -135,7 +132,6 @@ Parse the raw transcript into structured clinical data.
 
 The LLM is treated strictly as a **parser**, not an authority.
 
----
 
 ## 6. Trust & Validation Layer
 
@@ -169,8 +165,6 @@ Safety always wins over completeness.
 app/pipeline/normalize.py
 app/pipeline/evaluate.py
 
-yaml
-Copy code
 
 **Role**
 - Wrap LLM output into a single evaluation record
@@ -183,9 +177,6 @@ Copy code
 
 **File**
 app/storage/session_store.py
-
-yaml
-Copy code
 
 **Stored Per Session**
 - `raw_transcript.json`
@@ -226,7 +217,6 @@ Doctors remain the final authority.
 ## Installation
 
 ### 1. Clone the repository
-
 ```bash
 git clone <repository-url>
 cd <repository-name>
@@ -237,22 +227,23 @@ python -m venv .venv
 source .venv/bin/activate    # Linux / macOS
 # OR
 .venv\Scripts\activate       # Windows
-3. Install dependencies
-bash
-Copy code
+```
+### 3. Install dependencies
+```bash
 pip install -r requirements.txt
-4. Download Vosk Hindi model
+```
+### 4. Download Vosk Hindi model
+
 Download and extract:
 
-Copy code
 vosk-model-hi-0.22
 Place it at:
-
-swift
-Copy code
+```bash
 models/vosk/hi/vosk-model-hi-0.22/
-5. Configure environment variables
+```
+### 5. Configure environment variables
 Create a .env file:
+```bash
 
 env
 Copy code
@@ -260,22 +251,25 @@ ENV=dev
 GEMINI_API_KEY=your_api_key_here
 GEMINI_MODEL=gemini-1.5-pro
 Running the Application
-Development (recommended)
-bash
-Copy code
+Development (recommended):
+```
+
 uvicorn main:app --reload
 Open in browser:
 
-arduino
-Copy code
+```bash
+
 http://localhost:8000
-Alternative (no auto-reload)
-bash
-Copy code
+```
+Alternative (no auto-reload):
+
+```bash
+
 python main.py
-Project Structure
-arduino
-Copy code
+```
+## Project Structure
+```bash
+
 .
 ├── main.py
 ├── app/
@@ -291,16 +285,19 @@ Copy code
 ├── models/
 ├── data/
 └── requirements.txt
-Design Principles
-Raw data is never overwritten
+```
 
-LLM output is never blindly trusted
+## Design Principles
 
-Failures are explicit and visible
+- Raw data is never overwritten
 
-Safety over completeness
+- LLM output is never blindly trusted
 
-Auditability over convenience
+- Failures are explicit and visible
 
-Status
+- Safety over completeness
+
+- Auditability over convenience
+
+## Status
 This project is a functional proof-of-concept with a stable, extensible architecture suitable for further hardening and productionization.
