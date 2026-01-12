@@ -1,157 +1,306 @@
 # Hindi Medical Transcription & Clinical Note Assistant
 
-This project is a **real-time Hindi medical transcription system** designed to assist doctors in high-volume, low-resource settings by automatically generating structured clinical notes from spoken conversations.
+A **real-time Hindi medical transcription system** that converts live doctor–patient conversations into structured clinical data and a draft OPD note.
 
-It is **not an autonomous medical system**.  
-It is a **documentation assistant** that reduces manual note-taking.
+This system is **not a diagnostic tool** and **does not provide medical advice**.  
+It is a **documentation assistant** designed to reduce manual note-taking.
 
 ---
 
-## High-Level Overview
+## What This Project Does
 
-The system listens to a live medical conversation, converts speech to text, extracts clinically relevant information using an LLM, and generates a draft clinical report for the doctor.
-
-At every stage:
-- Raw data is preserved
-- No medical facts are invented
-- Trust and validation rules gate what is shown
+- Captures live audio from the browser
+- Performs **real-time Hindi speech-to-text** using Vosk
+- Displays **partial and final transcripts** instantly
+- Sends the completed transcript to an LLM (Gemini) for **structured extraction**
+- Applies **strict trust and validation rules**
+- Stores **every session** for audit, replay, and debugging
+- Generates a **draft Hindi clinical report** for doctor review
 
 ---
 
 ## Core Architecture
 
-### 1. Audio & Speech Recognition (ASR)
-- Browser captures live audio
-- Audio is streamed to the backend via WebSocket
-- **Vosk** performs real-time Hindi speech-to-text
-- Raw transcript is shown immediately to the user
+### High-Level Flow
 
-This layer is intentionally **dumb**:
-- No speaker guessing
-- No interpretation
+Browser Microphone
+        ↓ (WebSocket, PCM audio)
+FastAPI Server
+        ↓
+Vosk ASR (Hindi)
+        ↓
+Raw Transcript (Immutable)
+        ↓
+Gemini LLM (Parser Only)
+        ↓
+Trust & Validation Layer
+        ↓
+Structured Output / Draft Report
+        ↓
+Audit-First Storage
+
+## Architecture Layers
+
+### 1. Frontend (Browser)
+
+**Files**
+- `templates/index.html`
+- `static/app.js`
+- `static/style.css`
+
+**Responsibilities**
+- Capture microphone audio
+- Convert audio to 16-bit PCM @ 16 kHz
+- Stream audio via WebSocket
+- Display:
+  - live partial ASR text
+  - final transcript lines
+  - structured JSON
+  - generated clinical note
+
+**Design Principle**
+> The frontend is a dumb renderer.  
+> No interpretation, no medical logic.
+
+---
+
+### 2. Transport Layer (WebSocket)
+
+**File**
+- `app/api/websocket.py`
+
+**Responsibilities**
+- Session creation (`session_id`)
+- Streaming audio → ASR
+- Emitting events to UI:
+  - `partial`
+  - `transcript`
+  - `structured`
+- Triggering post-processing on `stop`
+
+---
+
+### 3. Speech Recognition (ASR)
+
+**File**
+- `app/asr/vosk_adapter.py`
+
+**Technology**
+- Vosk Hindi model (`vosk-model-hi-0.22`)
+
+**Behavior**
+- Emits:
+  - partial hypotheses (low latency)
+  - finalized utterances (committed)
+- No speaker detection
 - No rewriting
+- No medical logic
 
 ---
 
-### 2. Language Model Interpretation (LLM)
-After the consultation ends:
-- The raw transcript is sent to **Gemini**
-- The LLM performs:
-  - Speaker classification (patient / doctor / unknown)
-  - Symptom extraction (with duration)
-  - Medication extraction (with dosage)
-  - Diagnosis detection (only if explicitly stated)
-  - Clinical report generation (Hindi)
+## Raw Transcript (Ground Truth)
 
-The LLM is treated as a **read-only interpreter**, not a source of truth.
+This transcript:
+
+- Is immutable  
+- Is never overwritten  
+- Acts as the single source of truth for all downstream logic  
 
 ---
 
-### 3. Trust & Validation Layer
-Before any output is surfaced:
-- LLM output is validated against strict rules
-- Examples:
-  - Medications require doctor presence
-  - Symptoms must be grounded in patient speech
-  - Diagnoses must be explicitly stated
+## 5. LLM Normalization Layer
 
-The system decides whether to:
-- Use the LLM output
-- Partially use it
-- Ignore it entirely
+**File**
+app/llm/gemini.py
 
----
+markdown
+Copy code
 
-### 4. Persistence (Audit-First)
-Every session is stored automatically:
-- Raw ASR transcript
-- LLM structured output
-- Metadata (model, prompt version, timestamps)
+**Role**  
+Parse the raw transcript into structured clinical data.
 
-Storage is **append-only** and **session-based**, enabling:
-- Audits
-- Debugging
-- Replay
-- Future model re-runs
+**Tasks**
+- Speaker classification (`patient / doctor / unknown`)
+- Symptom extraction (with duration)
+- Medication extraction (with dosage)
+- Diagnosis detection (explicit only)
+- Generate a short Hindi clinical report
 
-No data is silently discarded.
+**Hard Constraints**
+- Temperature = `0.0`
+- Strict JSON schema
+- No markdown
+- No explanations
+- No assumptions
+
+The LLM is treated strictly as a **parser**, not an authority.
 
 ---
 
-### 5. User Interface
-The UI is a lightweight web app that shows:
-- Live transcript (real-time ASR)
-- Structured data (post-processing)
-- Generated clinical note
+## 6. Trust & Validation Layer
 
-The doctor always sees:
-- What was said
-- What was inferred
-- What was generated
+**File**
+app/pipeline/trust.py
 
----
+markdown
+Copy code
 
-## Separation of Concerns
+**Purpose**  
+Decide whether LLM output is allowed to be surfaced.
 
-| Layer | Responsibility |
-|------|---------------|
-| ASR (Vosk) | Speech → text |
-| UI | Display raw and structured data |
-| LLM (Gemini) | Interpretation & normalization |
-| Trust Logic | Safety & validation |
-| Storage | Persistent session records |
+**Rules**
+- Patient speech must exist
+- Doctor speech required for medications and diagnoses
+- Symptoms must be grounded in patient speech
+- Violations downgrade or block output
 
-Each layer can be modified or replaced independently.
+**Decisions**
+- `use_llm` – full report allowed
+- `partial_llm` – symptoms only
+- `ignore_llm` – nothing shown
 
----
-
-## Design Principles
-
-- **No hallucinated medical facts**
-- **Raw data is never overwritten**
-- **LLM output is never blindly trusted**
-- **Doctor remains the final authority**
-- **System failure degrades safely**
+Safety always wins over completeness.
 
 ---
 
-## What This System Is NOT
+## 7. Evaluation & Normalization
 
-- ❌ A diagnostic engine
-- ❌ A prescription system
-- ❌ A replacement for medical judgment
-- ❌ A production-certified medical device
+**Files**
+app/pipeline/normalize.py
+app/pipeline/evaluate.py
 
-It is a **documentation assistant**, nothing more.
+yaml
+Copy code
 
----
-
-## Intended Use Case
-
-- Remote or rural clinics
-- High patient throughput
-- Limited time for manual documentation
-- Doctors who need *draft notes*, not final decisions
+**Role**
+- Wrap LLM output into a single evaluation record
+- Attach trust decisions and metadata
+- Produce an auditable result per session
 
 ---
 
-## Future Directions (Optional)
+## 8. Persistence (Audit-First)
 
-- Session replay & analytics
-- Prompt versioning experiments
-- Confidence scoring
-- Database-backed storage
-- Integration with EMR systems
+**File**
+app/storage/session_store.py
+
+yaml
+Copy code
+
+**Stored Per Session**
+- `raw_transcript.json`
+- `structured_output.json`
+- `metadata.json`
+
+**Properties**
+- Append-only
+- Date-partitioned
+- Human-readable JSON
+- No data is silently discarded
 
 ---
 
-## Status
+## Features
 
-This project is currently a **functional proof-of-concept** with:
-- Real-time ASR
-- LLM-based normalization
-- Trust gating
-- Persistent storage
-- Usable UI
+- Real-time Hindi speech-to-text
+- Live partial transcript display
+- Strict LLM schema enforcement
+- Trust-gated clinical extraction
+- Draft Hindi OPD note generation
+- Full session audit trail
+- Safe and explicit failure modes
 
-The architecture is stable and extensible.
+---
+
+## What This Project Is NOT
+
+- ❌ Not a diagnostic engine  
+- ❌ Not a prescription system  
+- ❌ Not an autonomous medical agent  
+- ❌ Not a certified medical device  
+
+Doctors remain the final authority.
+
+---
+
+## Installation
+
+### 1. Clone the repository
+
+```bash
+git clone <repository-url>
+cd <repository-name>
+2. Create and activate virtual environment
+bash
+Copy code
+python -m venv .venv
+source .venv/bin/activate    # Linux / macOS
+# OR
+.venv\Scripts\activate       # Windows
+3. Install dependencies
+bash
+Copy code
+pip install -r requirements.txt
+4. Download Vosk Hindi model
+Download and extract:
+
+Copy code
+vosk-model-hi-0.22
+Place it at:
+
+swift
+Copy code
+models/vosk/hi/vosk-model-hi-0.22/
+5. Configure environment variables
+Create a .env file:
+
+env
+Copy code
+ENV=dev
+GEMINI_API_KEY=your_api_key_here
+GEMINI_MODEL=gemini-1.5-pro
+Running the Application
+Development (recommended)
+bash
+Copy code
+uvicorn main:app --reload
+Open in browser:
+
+arduino
+Copy code
+http://localhost:8000
+Alternative (no auto-reload)
+bash
+Copy code
+python main.py
+Project Structure
+arduino
+Copy code
+.
+├── main.py
+├── app/
+│   ├── api/
+│   ├── asr/
+│   ├── llm/
+│   ├── pipeline/
+│   ├── storage/
+│   ├── models.py
+│   └── config.py
+├── templates/
+├── static/
+├── models/
+├── data/
+└── requirements.txt
+Design Principles
+Raw data is never overwritten
+
+LLM output is never blindly trusted
+
+Failures are explicit and visible
+
+Safety over completeness
+
+Auditability over convenience
+
+Status
+This project is a functional proof-of-concept with a stable, extensible architecture suitable for further hardening and productionization.
