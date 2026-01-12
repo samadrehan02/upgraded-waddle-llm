@@ -1,8 +1,6 @@
 import json
 from typing import List, Dict, Any
-
 from google import genai
-
 from app.config import settings
 from app.models import TranscriptLine
 
@@ -127,12 +125,10 @@ ALLOWED JSON SCHEMA (EXACT):
             "model": settings.GEMINI_MODEL,
             "error": "schema_violation",
             "raw_text": raw_text,
-            "prompt_version": "v3",
         }
 
     return {
         "model": settings.GEMINI_MODEL,
         "data": parsed,
-        "prompt_version": "v3",
         "sanitized": sanitized,
     }
