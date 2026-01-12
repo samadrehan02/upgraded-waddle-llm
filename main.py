@@ -1,13 +1,26 @@
-from uuid import uuid4
+import uvicorn
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 
-from app.asr.vosk_adapter import run_vosk_asr
-from app.pipeline.normalize import run_normalization
-from app.storage import store_evaluation
+from app.api.websocket import ws_router
 
-session_id = str(uuid4())
+app = FastAPI()
 
-transcript = run_vosk_asr()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+app.include_router(ws_router)
 
-evaluation = run_normalization(transcript)
 
-store_evaluation(session_id, evaluation)
+@app.get("/", response_class=HTMLResponse)
+def index():
+    with open("templates/index.html", encoding="utf-8") as f:
+        return f.read()
+
+
+if __name__ == "__main__":
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        reload=False,
+    )
