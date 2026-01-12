@@ -117,7 +117,6 @@ ALLOWED JSON SCHEMA (EXACT):
             "model": settings.GEMINI_MODEL,
             "error": "invalid_json",
             "raw_text": raw_text,
-            "prompt_version": "v3",
         }
 
     if not isinstance(parsed, dict) or set(parsed.keys()) != EXPECTED_KEYS:
