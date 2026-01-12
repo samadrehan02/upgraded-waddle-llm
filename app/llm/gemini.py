@@ -1,19 +1,12 @@
 import json
 from typing import List, Dict, Any
+
 from google import genai
+
 from app.config import settings
 from app.models import TranscriptLine
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
-
-EXPECTED_KEYS = {
-    "utterances",
-    "symptoms",
-    "diagnosis",
-    "medications",
-    "advice",
-    "clinical_report",
-}
 
 
 def _format_transcript(transcript: List[TranscriptLine]) -> str:
@@ -26,6 +19,7 @@ def _format_transcript(transcript: List[TranscriptLine]) -> str:
 def normalize_with_gemini(
     transcript: List[TranscriptLine],
 ) -> Dict[str, Any]:
+
     formatted_transcript = _format_transcript(transcript)
 
     prompt = f"""
@@ -53,19 +47,19 @@ Tasks:
    - diagnosis (only if explicitly stated)
    - advice (only if explicitly stated)
 
-3. Generate a short clinical report in English.
+3. Generate a short clinical report.
 
 Return ONLY valid JSON.
 Do NOT include markdown.
 Do NOT include explanations.
 
-ALLOWED JSON SCHEMA (EXACT):
+JSON FORMAT:
 {{
   "utterances": [
     {{
       "index": 1,
       "speaker": "patient | doctor | unknown",
-      "text": "string",
+      "text": "string"
     }}
   ],
   "symptoms": [
@@ -97,16 +91,14 @@ ALLOWED JSON SCHEMA (EXACT):
             "model": settings.GEMINI_MODEL,
             "error": "llm_call_failed",
             "details": str(e),
-            "prompt_version": "v3",
+            "prompt_version": "legacy_v1",
         }
 
     raw_text = (response.text or "").strip()
-    sanitized = False
 
     # Defensive markdown stripping
     if raw_text.startswith("```"):
-        sanitized = True
-        raw_text = raw_text.strip().lstrip("`").rstrip("`")
+        raw_text = raw_text.strip("`")
         if raw_text.lower().startswith("json"):
             raw_text = raw_text[4:].strip()
 
@@ -119,10 +111,82 @@ ALLOWED JSON SCHEMA (EXACT):
             "raw_text": raw_text,
         }
 
-    if not isinstance(parsed, dict) or set(parsed.keys()) != EXPECTED_KEYS:
+    if not isinstance(parsed, dict):
         return {
             "model": settings.GEMINI_MODEL,
-            "error": "schema_violation",
+            "error": "invalid_schema",
+            "raw_text": raw_text,
+        }
+
+    return {
+        "model": settings.GEMINI_MODEL,
+        "data": parsed,
+    }
+
+def generate_report_from_state(
+    structured_state: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Generate final clinical note from structured state only.
+    No parsing. No extraction. Rendering only.
+    """
+
+    prompt = f"""
+You are generating a draft clinical note from structured medical data.
+
+Rules:
+- Do NOT add new medical facts.
+- Do NOT infer diagnosis.
+- Use ONLY the provided structured data.
+- Write in clear, professional Hindi.
+- This is a DRAFT for doctor review.
+- Return ONLY valid JSON.
+- No markdown. No explanations.
+
+STRUCTURED STATE:
+{json.dumps(structured_state, ensure_ascii=False)}
+
+Return JSON in the following format:
+{{
+  "clinical_report": "string"
+}}
+"""
+
+    try:
+        response = client.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=prompt,
+            config={"temperature": 0.0},
+        )
+    except Exception as e:
+        return {
+            "model": settings.GEMINI_MODEL,
+            "error": "llm_call_failed",
+            "details": str(e),
+            "prompt_version": "report_v1",
+        }
+
+    raw_text = (response.text or "").strip()
+
+    # Defensive markdown stripping
+    if raw_text.startswith("```"):
+        raw_text = raw_text.strip("`")
+        if raw_text.lower().startswith("json"):
+            raw_text = raw_text[4:].strip()
+
+    try:
+        parsed = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return {
+            "model": settings.GEMINI_MODEL,
+            "error": "invalid_json",
+            "raw_text": raw_text,
+        }
+
+    if not isinstance(parsed, dict) or "clinical_report" not in parsed:
+        return {
+            "model": settings.GEMINI_MODEL,
+            "error": "invalid_schema",
             "raw_text": raw_text,
         }
 
