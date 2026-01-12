@@ -53,7 +53,7 @@ Tasks:
    - diagnosis (only if explicitly stated)
    - advice (only if explicitly stated)
 
-3. Generate a short clinical report in Hindi.
+3. Generate a short clinical report in English.
 
 Return ONLY valid JSON.
 Do NOT include markdown.
