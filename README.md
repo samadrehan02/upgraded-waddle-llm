@@ -220,9 +220,9 @@ Doctors remain the final authority.
 ```bash
 git clone <repository-url>
 cd <repository-name>
-2. Create and activate virtual environment
-bash
-Copy code
+```
+### 2. Create and activate virtual environment
+```bash
 python -m venv .venv
 source .venv/bin/activate    # Linux / macOS
 # OR
