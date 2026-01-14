@@ -138,7 +138,8 @@ Rules:
 - Do NOT add new medical facts.
 - Do NOT infer diagnosis.
 - Use ONLY the provided structured data.
-- Write in clear, professional Hindi.
+- Write the entire clinical note in clear, professional English only.
+- Do NOT mix languages or transliterate.
 - This is a DRAFT for doctor review.
 - Return ONLY valid JSON.
 - No markdown. No explanations.

@@ -43,21 +43,34 @@ Tasks:
   - advice (ONLY if explicitly stated)
 
 Rules:
-- Do NOT modify or remove existing utterances.
-- Do NOT change speaker labels of existing utterances.
-- Do NOT remove existing clinical facts unless explicitly contradicted.
-- If unsure about speaker or facts, use "unknown" or leave fields unchanged.
-- Do NOT infer diagnoses.
-- Return ONLY valid JSON.
-- Do NOT include explanations or markdown.
+- Update the structured state based on the new utterances only.
+Identify and extract symptoms, medications, diagnosis, and advice
+from the new utterances when they are explicitly stated.
+- It is acceptable to return the same structured state
+  if no new clear information is present.
+- Do NOT invent or infer facts.
+- Diagnosis MUST be added only if explicitly stated.
+- If unsure, leave fields unchanged.
+- Speaker may be "unknown" if unclear.
 
+Example:
+
+If the new utterance is:
+"मुझे दो दिन से बुखार है"
+
+Then the structured update should include:
+{
+  "symptoms": [
+    { "name": "fever", "duration": "two days" }
+  ]
+}
 CURRENT STATE:
 {json.dumps(llm_state, ensure_ascii=False)}
 
 NEW UTTERANCES:
 {json.dumps(new_utterances, ensure_ascii=False)}
 
-Return the UPDATED structured state using the SAME JSON SCHEMA.
+Return a JSON object containing the structured state fields.
 """
 
     response = client.models.generate_content(
@@ -67,6 +80,9 @@ Return the UPDATED structured state using the SAME JSON SCHEMA.
     )
 
     raw_text = (response.text or "").strip()
+
+    if not raw_text:
+        raise ValueError("empty_llm_response")
 
     if raw_text.startswith("```"):
         raw_text = raw_text.strip("`")

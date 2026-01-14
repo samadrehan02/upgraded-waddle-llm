@@ -103,6 +103,7 @@ async def websocket_endpoint(ws: WebSocket):
 
             if (
                 not pause_triggered
+                and not llm_in_flight
                 and silence_duration >= SILENCE_THRESHOLD_SECONDS
                 and session_state["last_processed_index"] < len(transcript)
             ):
