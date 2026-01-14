@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 import time
 import asyncio
-
+import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.asr.vosk_adapter import run_vosk_asr_stream
@@ -28,7 +28,7 @@ async def websocket_endpoint(ws: WebSocket):
 
     now = datetime.now()
     session_id = now.strftime("%Y-%m-%d_%H-%M-%S_%f")
-    session_date = session_id.split("_")[0]
+    session_date = now.strftime("%Y-%m-%d")
 
     transcript: List[Dict[str, Any]] = []
 
@@ -54,14 +54,17 @@ async def websocket_endpoint(ws: WebSocket):
     llm_in_flight = False
     active = True
 
-    async def run_incremental_update(new_utterances: List[Dict[str, Any]]):
+    async def run_incremental_update(
+            new_utterances: List[Dict[str,Any]],
+            force: bool = False,
+    ):
         nonlocal llm_in_flight, session_state, last_llm_update_time
 
         if not new_utterances or llm_in_flight:
             return
 
         now_ts = time.time()
-        if now_ts - last_llm_update_time < MIN_UPDATE_INTERVAL:
+        if not force and now_ts - last_llm_update_time < MIN_UPDATE_INTERVAL:
             return  # ✅ throttle
 
         llm_in_flight = True
@@ -88,7 +91,9 @@ async def websocket_endpoint(ws: WebSocket):
             )
 
             session_state["structured"] = updated_state
-            session_state["last_processed_index"] = new_utterances[-1]["index"]
+            session_state["last_processed_index"] = max(
+                u["index"] for u in new_utterances if "index" in u
+            )
             last_llm_update_time = time.time()
 
         except Exception as e:
@@ -160,7 +165,7 @@ async def websocket_endpoint(ws: WebSocket):
                         u for u in transcript
                         if u["index"] > session_state["last_processed_index"]
                     ]
-                    await run_incremental_update(new_utterances)
+                    await run_incremental_update(new_utterances, force = True)
 
                 loop = asyncio.get_running_loop()
                 t0 = time.time()
@@ -175,7 +180,9 @@ async def websocket_endpoint(ws: WebSocket):
 
                 pdf_path = store_pdf_report(
                     session_id,
-                    llm_result["data"]["clinical_report"]
+                    session_date=session_date,
+                    structured_state=session_state["structured"],
+                    clinical_report=llm_result["data"]["clinical_report"]
                 )
                 print(f"[SESSION {session_id}] PDF GENERATION DONE: {pdf_path}")
 
@@ -195,6 +202,7 @@ async def websocket_endpoint(ws: WebSocket):
                         "timestamp": datetime.now().isoformat(),
                         "model": llm_result.get("model"),
                         "prompt_version": llm_result.get("prompt_version"),
+                        "patient": session_state["structured"]["patient"],
                     },
                 )
 
