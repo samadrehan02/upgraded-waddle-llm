@@ -39,3 +39,10 @@ def store_metadata(
         json.dumps(metadata, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+def store_structured_state(session_id: str, structured_state: dict):
+    session_dir = _session_dir(session_id)
+    path = session_dir / "structured_state.json"
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(structured_state, f, ensure_ascii=False, indent=2)

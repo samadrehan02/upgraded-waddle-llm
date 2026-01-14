@@ -6,13 +6,14 @@ import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.asr.vosk_adapter import run_vosk_asr_stream
+from app.llm.incremental import update_structured_state
+from app.llm.gemini import generate_report_from_state
 from app.storage.session_store import (
     store_raw_transcript,
     store_structured_output,
+    store_structured_state,
     store_metadata,
 )
-from app.llm.incremental import update_structured_state
-from app.llm.gemini import generate_report_from_state
 
 ws_router = APIRouter()
 
@@ -22,8 +23,9 @@ SILENCE_THRESHOLD_SECONDS = 8
 @ws_router.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
+
     now = datetime.now()
-    session_id = now.strftime("%Y-%m-%d_%H-%M-%S")
+    session_id = now.strftime("%Y-%m-%d_%H-%M-%S_%f")
 
     transcript: List[Dict[str, Any]] = []
 
@@ -41,11 +43,12 @@ async def websocket_endpoint(ws: WebSocket):
     last_speaker: str | None = None
     last_text_time = time.monotonic()
     pause_triggered = False
+    active = True
 
     async def check_patient_silence():
-        nonlocal last_speaker, last_text_time, pause_triggered
+        nonlocal last_speaker, last_text_time, pause_triggered, active
 
-        while True:
+        while active:
             await asyncio.sleep(1)
 
             silence_duration = time.monotonic() - last_text_time
@@ -57,6 +60,7 @@ async def websocket_endpoint(ws: WebSocket):
                 and session_state["last_processed_index"] < len(transcript)
             ):
                 pause_triggered = True
+
                 new_utterances = [
                     u for u in transcript
                     if u["index"] > session_state["last_processed_index"]
@@ -72,20 +76,17 @@ async def websocket_endpoint(ws: WebSocket):
                         session_state["structured"],
                         new_utterances,
                     )
-
                     session_state["structured"] = updated_state
                     session_state["last_processed_index"] = max(
                         u["index"] for u in new_utterances
                     )
-
                 except Exception as e:
                     print(
                         f"[SESSION {session_id}] "
                         f"Incremental update failed: {e}"
                     )
 
-
-    asyncio.create_task(check_patient_silence())
+    silence_task = asyncio.create_task(check_patient_silence())
 
     try:
         async for event in run_vosk_asr_stream(ws):
@@ -109,9 +110,10 @@ async def websocket_endpoint(ws: WebSocket):
                 transcript.append(utterance)
                 session_state["structured"]["utterances"].append(utterance)
 
-                last_speaker = "unknown"
+                # TEMP: treat all speech as patient for pause detection
+                last_speaker = "patient"
                 last_text_time = time.monotonic()
-                pause_triggered = False  # reset debounce
+                pause_triggered = False
 
                 await ws.send_json({
                     "type": "transcript",
@@ -137,11 +139,15 @@ async def websocket_endpoint(ws: WebSocket):
                             u["index"] for u in new_utterances
                         )
                     except Exception as e:
-                        print(f"[SESSION {session_id}] Final incremental update failed: {e}")
+                        print(
+                            f"[SESSION {session_id}] "
+                            f"Final incremental update failed: {e}"
+                        )
 
                 llm_result = generate_report_from_state(session_state["structured"])
 
                 store_raw_transcript(session_id, transcript)
+                store_structured_state(session_id, session_state["structured"])
                 store_structured_output(session_id, llm_result)
 
                 store_metadata(
@@ -162,4 +168,6 @@ async def websocket_endpoint(ws: WebSocket):
                 transcript.clear()
 
     except WebSocketDisconnect:
+        active = False
+        silence_task.cancel()
         return
