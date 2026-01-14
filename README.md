@@ -218,8 +218,8 @@ Doctors remain the final authority.
 
 ### 1. Clone the repository
 ```bash
-git clone <repository-url>
-cd <repository-name>
+git clone <https://github.com/samadrehan02/upgraded-waddle-llm>
+cd <upgraded-waddle-llm>
 ```
 ### 2. Create and activate virtual environment
 ```bash
