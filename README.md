@@ -218,8 +218,8 @@ Doctors remain the final authority.
 
 ### 1. Clone the repository
 ```bash
-git clone <https://github.com/samadrehan02/upgraded-waddle-llm>
-cd <upgraded-waddle-llm>
+git clone https://github.com/samadrehan02/upgraded-waddle-llm
+cd upgraded-waddle-llm
 ```
 ### 2. Create and activate virtual environment
 ```bash
@@ -248,7 +248,7 @@ Create a .env file:
 env
 ENV=dev
 GEMINI_API_KEY=your_api_key_here
-GEMINI_MODEL=gemini-1.5-pro
+GEMINI_MODEL=gemini-3-flash-preview (or whichever you want, 2.5 Pro, and flash preview work best)
 ```
 ## Running the Application
 
