@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-01-14 — Streaming Medical Scribe v1 Completed
+## 2026-01-14
 
 ### Architecture & Flow
 - Finalized a **streaming scribe architecture**:

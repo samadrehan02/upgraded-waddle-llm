@@ -2,21 +2,26 @@ import json
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List
+
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.enums import TA_LEFT
 from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 BASE_DIR = Path("data/sessions")
 
+pdfmetrics.registerFont(
+    TTFont("DejaVu", "static/fonts/DejaVuSans.ttf")
+)
 
 def _session_dir(session_id: str) -> Path:
     date_dir = BASE_DIR / datetime.now().strftime("%Y-%m-%d")
     session_dir = date_dir / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
     return session_dir
-
 
 def store_raw_transcript(session_id: str, transcript: List[Dict[str, Any]]) -> None:
     path = _session_dir(session_id) / "raw_transcript.json"
@@ -25,7 +30,6 @@ def store_raw_transcript(session_id: str, transcript: List[Dict[str, Any]]) -> N
         encoding="utf-8",
     )
 
-
 def store_structured_output(session_id: str, structured: Dict[str, Any]) -> None:
     path = _session_dir(session_id) / "structured_output.json"
     path.write_text(
@@ -33,23 +37,35 @@ def store_structured_output(session_id: str, structured: Dict[str, Any]) -> None
         encoding="utf-8",
     )
 
+def store_structured_state(session_id: str, structured_state: Dict[str, Any]) -> None:
+    path = _session_dir(session_id) / "structured_state.json"
+    path.write_text(
+        json.dumps(structured_state, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
-def store_metadata(
-    session_id: str,
-    metadata: Dict[str, Any],
-) -> None:
+def store_metadata(session_id: str, metadata: Dict[str, Any]) -> None:
     path = _session_dir(session_id) / "metadata.json"
     path.write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
-def store_pdf_report(session_id: str, session_date: str, structured_state: dict, clinical_report: str):
+def store_pdf_report(
+    session_id: str,
+    session_date: str,
+    structured_state: Dict[str, Any],
+    clinical_report: str,
+) -> Path:
+
     session_dir = _session_dir(session_id)
     pdf_path = session_dir / "clinical_report.pdf"
 
     styles = getSampleStyleSheet()
-    story = []
+
+    # Ensure Unicode font everywhere
+    for style in styles.byName.values():
+        style.fontName = "DejaVu"
 
     title_style = ParagraphStyle(
         "Title",
@@ -67,71 +83,91 @@ def store_pdf_report(session_id: str, session_date: str, structured_state: dict,
 
     body_style = styles["Normal"]
 
-    # Title
+    story: List[Any] = []
+
+
     story.append(Paragraph("CLINICAL CONSULTATION NOTE", title_style))
     story.append(Spacer(1, 12))
 
-    # Patient details
     patient = structured_state.get("patient", {})
-    patient_table = Table([
-        ["Patient Name", patient.get("name", "—")],
-        ["Age", patient.get("age", "—")],
-        ["Date", session_date],
-        ["Session ID", session_id],
-    ], colWidths=[120, 350])
 
-    patient_table.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
-        ("BACKGROUND", (0,0), (0,-1), colors.whitesmoke),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("FONT", (0,0), (-1,-1), "Helvetica"),
-    ]))
+    patient_table = Table(
+        [
+            ["Patient Name", patient.get("name") or "—"],
+            ["Age", patient.get("age") or "—"],
+            ["Date", session_date],
+            ["Session ID", session_id],
+        ],
+        colWidths=[120, 350],
+    )
+
+    patient_table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("BACKGROUND", (0, 0), (0, -1), colors.whitesmoke),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONT", (0, 0), (-1, -1), "DejaVu"),
+            ]
+        )
+    )
 
     story.append(patient_table)
     story.append(Spacer(1, 14))
 
-    # Symptoms
-    if structured_state.get("symptoms"):
+    symptoms = structured_state.get("symptoms", [])
+    if symptoms:
         story.append(Paragraph("Chief Complaints", section_style))
-        for s in structured_state["symptoms"]:
-            text = f"- {s['name']}"
+        for s in symptoms:
+            line = f"- {s.get('name')}"
             if s.get("duration"):
-                text += f" ({s['duration']})"
-            story.append(Paragraph(text, body_style))
+                line += f" ({s['duration']})"
+            story.append(Paragraph(line, body_style))
 
-    # Diagnosis
-    if structured_state.get("diagnosis"):
+    tests = structured_state.get("tests", [])
+    if tests:
+        story.append(Paragraph("Investigations", section_style))
+        for t in tests:
+            line = f"- {t.get('test_name')}"
+            if t.get("result"):
+                line += f": {t['result']}"
+            if t.get("note"):
+                line += f" ({t['note']})"
+            story.append(Paragraph(line, body_style))
+
+    diagnosis = structured_state.get("diagnosis", [])
+    if diagnosis:
         story.append(Paragraph("Diagnosis", section_style))
-        for d in structured_state["diagnosis"]:
+        for d in diagnosis:
             story.append(Paragraph(f"- {d}", body_style))
 
-    # Medications
-    if structured_state.get("medications"):
+    medications = structured_state.get("medications", [])
+    if medications:
         story.append(Paragraph("Medications", section_style))
-        for m in structured_state["medications"]:
-            line = f"- {m['name']}"
+        for m in medications:
+            line = f"- {m.get('name')}"
             if m.get("dosage"):
                 line += f" — {m['dosage']}"
             story.append(Paragraph(line, body_style))
 
-    # Advice
-    if structured_state.get("advice"):
+    advice = structured_state.get("advice", [])
+    if advice:
         story.append(Paragraph("Advice", section_style))
-        for a in structured_state["advice"]:
+        for a in advice:
             story.append(Paragraph(f"- {a}", body_style))
 
-    # Narrative summary
     if clinical_report:
         story.append(Paragraph("Clinical Summary", section_style))
         for line in clinical_report.split("\n"):
             story.append(Paragraph(line, body_style))
 
-    # Footer
     story.append(Spacer(1, 20))
-    story.append(Paragraph(
-        "Generated by AI Scribe — Draft only. Doctor verification required.",
-        styles["Italic"]
-    ))
+    story.append(
+        Paragraph(
+            "Generated by AI Scribe — Draft only. Doctor verification required.",
+            styles["Italic"],
+        )
+    )
 
     doc = SimpleDocTemplate(
         str(pdf_path),
@@ -144,10 +180,3 @@ def store_pdf_report(session_id: str, session_date: str, structured_state: dict,
 
     doc.build(story)
     return pdf_path
-
-def store_structured_state(session_id: str, structured_state: dict):
-    session_dir = _session_dir(session_id)
-    path = session_dir / "structured_state.json"
-
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(structured_state, f, ensure_ascii=False, indent=2)

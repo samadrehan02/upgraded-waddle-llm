@@ -41,6 +41,7 @@ async def websocket_endpoint(ws: WebSocket):
             },
             "utterances": [],
             "symptoms": [],
+            "tests":[],
             "medications": [],
             "diagnosis": [],
             "advice": [],
