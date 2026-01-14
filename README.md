@@ -256,8 +256,9 @@ Development (recommended):
 
 ```bash
 uvicorn main:app --reload
-Open in browser:
 ```
+Open in browser:
+
 ```bash
 
 http://localhost:8000
