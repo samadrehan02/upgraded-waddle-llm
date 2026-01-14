@@ -44,8 +44,8 @@ Tasks:
 
 Rules:
 - Update the structured state based on the new utterances only.
-Identify and extract symptoms, medications, diagnosis, and advice
-from the new utterances when they are explicitly stated.
+- Identify and extract symptoms, medications, diagnosis, and advice
+  from the new utterances when they are explicitly stated.
 - It is acceptable to return the same structured state
   if no new clear information is present.
 - Do NOT invent or infer facts.
@@ -59,18 +59,25 @@ If the new utterance is:
 "मुझे दो दिन से बुखार है"
 
 Then the structured update should include:
-{
+{{
   "symptoms": [
-    { "name": "fever", "duration": "two days" }
+    {{ "name": "fever", "duration": "two days" }}
   ]
-}
+}}
 CURRENT STATE:
 {json.dumps(llm_state, ensure_ascii=False)}
 
 NEW UTTERANCES:
 {json.dumps(new_utterances, ensure_ascii=False)}
 
-Return a JSON object containing the structured state fields.
+Return a JSON object with the following optional fields:
+- symptoms
+- medications
+- diagnosis
+- advice
+
+Include a field ONLY if it should be added or updated.
+Do NOT remove existing data.
 """
 
     response = client.models.generate_content(
