@@ -1,2 +1,8 @@
 python-dotenv
 google-genai
+reportlab
+vosk
+pyaudio
+fastapi
+uvicorn
+pydantic

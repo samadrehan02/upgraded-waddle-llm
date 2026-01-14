@@ -14,6 +14,7 @@ from app.storage.session_store import (
     store_structured_state,
     store_metadata,
 )
+from app.storage.session_store import store_pdf_report
 
 ws_router = APIRouter()
 
@@ -27,6 +28,7 @@ async def websocket_endpoint(ws: WebSocket):
 
     now = datetime.now()
     session_id = now.strftime("%Y-%m-%d_%H-%M-%S_%f")
+    session_date = session_id.split("_")[0]
 
     transcript: List[Dict[str, Any]] = []
 
@@ -164,6 +166,13 @@ async def websocket_endpoint(ws: WebSocket):
                     generate_report_from_state,
                     session_state["structured"],
                 )
+                print(f"[SESSION {session_id}] PDF GENERATION START")
+
+                pdf_path = store_pdf_report(
+                    session_id,
+                    llm_result["data"]["clinical_report"]
+                )
+                print(f"[SESSION {session_id}] PDF GENERATION DONE: {pdf_path}")
 
                 print(
                     f"[SESSION {session_id}] REPORT GENERATION DONE "
@@ -187,8 +196,8 @@ async def websocket_endpoint(ws: WebSocket):
                 await ws.send_json({
                     "type": "structured",
                     "data": llm_result,
+                    "pdf": f"/data/sessions/{session_date}/{session_id}/clinical_report.pdf"
                 })
-
                 transcript.clear()
 
     except WebSocketDisconnect:

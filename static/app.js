@@ -13,9 +13,10 @@ const statusDot = document.getElementById("statusDot");
 const statusText = document.getElementById("statusText");
 const transcriptCount = document.getElementById("transcriptCount");
 const copyBtn = document.getElementById("copyBtn");
+const pdfBtn = document.getElementById("pdfBtn");
 
 let lineCount = 0;
-let partialElement = null;  // Track the partial result div
+let partialElement = null;
 
 startBtn.onclick = startRecording;
 stopBtn.onclick = stopRecording;
@@ -27,22 +28,24 @@ function updateStatus(status, text) {
 }
 
 function clearEmptyStates() {
-    const emptyStates = document.querySelectorAll('.empty-state');
-    emptyStates.forEach(el => el.remove());
+    document.querySelectorAll(".empty-state").forEach(el => el.remove());
 }
 
 async function startRecording() {
-    // Clear previous session
+    // Reset UI
     transcriptBox.innerHTML = "";
     structuredBox.textContent = "";
     llmReportBox.textContent = "";
+    transcriptCount.textContent = "0 lines";
     lineCount = 0;
     partialElement = null;
-    transcriptCount.textContent = "0 lines";
+
     copyBtn.style.display = "none";
+    if (pdfBtn) pdfBtn.style.display = "none";
+
     clearEmptyStates();
 
-    updateStatus("recording", "Recording...");
+    updateStatus("recording", "Recording…");
     startBtn.disabled = true;
     stopBtn.disabled = false;
 
@@ -60,24 +63,23 @@ async function startRecording() {
         const data = JSON.parse(event.data);
 
         if (data.type === "partial") {
-            // Show partial result (live, uncommitted text)
             showPartial(data.text);
             return;
         }
 
         if (data.type === "transcript") {
-            // Remove partial and append final transcript
             clearPartial();
             appendTranscript(data.time, data.text);
             return;
         }
-        if (data.type === "structured") {
-            updateStatus("ready", "Report generated");
 
-            // Show structured JSON (optional)
+        if (data.type === "structured") {
+            updateStatus("ready", "Report ready");
+
+            // Structured JSON
             structuredBox.textContent = JSON.stringify(data.data, null, 2);
 
-            // Show clinical report directly from WebSocket payload
+            // Clinical report
             const report =
                 data.data?.data?.clinical_report ??
                 data.data?.clinical_report ??
@@ -85,39 +87,45 @@ async function startRecording() {
 
             llmReportBox.textContent = report;
             copyBtn.style.display = "flex";
+
+            // PDF button
+            if (data.pdf && pdfBtn) {
+                pdfBtn.style.display = "flex";
+                pdfBtn.onclick = () => window.open(data.pdf, "_blank");
+            }
+
             return;
         }
-
     };
 
-    // Start audio capture with larger buffer for efficiency
+    // Audio capture
     try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new AudioContext({sampleRate: 16000});
-        await audioContext.resume();
-        source = audioContext.createMediaStreamSource(stream);
 
-        // Increased buffer size from 1024 to 4096 for better efficiency
+        audioContext = new AudioContext({ sampleRate: 16000 });
+        await audioContext.resume();
+
+        source = audioContext.createMediaStreamSource(stream);
         processor = audioContext.createScriptProcessor(4096, 1, 1);
+
         source.connect(processor);
         processor.connect(audioContext.destination);
 
         processor.onaudioprocess = (event) => {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
             const input = event.inputBuffer.getChannelData(0);
-            const pcm = floatTo16BitPCM(input);
-            ws.send(pcm);
+            ws.send(floatTo16BitPCM(input));
         };
     } catch (err) {
-        console.error("Microphone access denied", err);
-        updateStatus("", "Microphone error");
+        console.error("Microphone error", err);
+        updateStatus("", "Microphone access denied");
         startBtn.disabled = false;
         stopBtn.disabled = true;
     }
 }
 
 function stopRecording() {
-    updateStatus("processing", "Processing consultation...");
+    updateStatus("processing", "Finalizing report…");
     stopBtn.disabled = true;
 
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -131,20 +139,17 @@ function stopRecording() {
 }
 
 function showPartial(text) {
-    // Create or update the partial result element
     if (!partialElement) {
         partialElement = document.createElement("div");
         partialElement.className = "transcript-line partial";
         transcriptBox.appendChild(partialElement);
     }
-
-    // Update partial text with styling to indicate it's temporary
-    partialElement.innerHTML = `<span style="color: #888; font-style: italic;">${text}</span>`;
+    partialElement.innerHTML =
+        `<span style="color:#888;font-style:italic;">${text}</span>`;
     transcriptBox.scrollTop = transcriptBox.scrollHeight;
 }
 
 function clearPartial() {
-    // Remove partial element when final result arrives
     if (partialElement) {
         partialElement.remove();
         partialElement = null;
@@ -154,18 +159,20 @@ function clearPartial() {
 function appendTranscript(time, text) {
     const line = document.createElement("div");
     line.className = "transcript-line";
-    line.innerHTML = `[${time}] ${text}`;
+    line.textContent = `[${time}] ${text}`;
     transcriptBox.appendChild(line);
     transcriptBox.scrollTop = transcriptBox.scrollHeight;
 
     lineCount++;
-    transcriptCount.textContent = `${lineCount} line${lineCount !== 1 ? 's' : ''}`;
+    transcriptCount.textContent =
+        `${lineCount} line${lineCount !== 1 ? "s" : ""}`;
 }
 
 function floatTo16BitPCM(float32Array) {
     const buffer = new ArrayBuffer(float32Array.length * 2);
     const view = new DataView(buffer);
     let offset = 0;
+
     for (let i = 0; i < float32Array.length; i++, offset += 2) {
         let sample = Math.max(-1, Math.min(1, float32Array[i]));
         view.setInt16(offset, sample * 0x7fff, true);
@@ -194,11 +201,13 @@ function cleanupAudio() {
 
 function copyToClipboard() {
     const text = llmReportBox.textContent;
+    if (!text) return;
+
     navigator.clipboard.writeText(text).then(() => {
-        const icon = copyBtn.querySelector('.material-icons');
-        icon.textContent = 'check';
+        const icon = copyBtn.querySelector(".material-icons");
+        icon.textContent = "check";
         setTimeout(() => {
-            icon.textContent = 'content_copy';
-        }, 2000);
+            icon.textContent = "content_copy";
+        }, 1500);
     });
 }

@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List
-
+from reportlab.platypus import SimpleDocTemplate, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
 
 BASE_DIR = Path("data/sessions")
 
@@ -46,3 +48,26 @@ def store_structured_state(session_id: str, structured_state: dict):
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(structured_state, f, ensure_ascii=False, indent=2)
+
+def store_pdf_report(session_id: str, clinical_report: str):
+    session_dir = _session_dir(session_id)
+    pdf_path = session_dir / "clinical_report.pdf"
+
+    styles = getSampleStyleSheet()
+    story = []
+
+    for line in clinical_report.split("\n"):
+        story.append(Paragraph(line, styles["Normal"]))
+
+    doc = SimpleDocTemplate(
+        str(pdf_path),
+        pagesize=A4,
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36,
+    )
+
+    doc.build(story)
+    return pdf_path
+
