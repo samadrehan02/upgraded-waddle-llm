@@ -71,29 +71,23 @@ async function startRecording() {
             appendTranscript(data.time, data.text);
             return;
         }
-
         if (data.type === "structured") {
-            updateStatus("processing", "Generating report...");
+            updateStatus("ready", "Report generated");
+
+            // Show structured JSON (optional)
             structuredBox.textContent = JSON.stringify(data.data, null, 2);
-            // Generate OPD note
-            fetch("/generate-report", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data.data)
-            })
-            .then(res => res.json())
-            .then(res => {
-                llmReportBox.textContent = res.note;
-                copyBtn.style.display = "flex";
-                updateStatus("ready", "Report generated");
-            })
-            .catch(err => {
-                console.error(err);
-                llmReportBox.textContent = "❌ Failed to generate OPD note.";
-                updateStatus("", "Generation failed");
-            });
+
+            // Show clinical report directly from WebSocket payload
+            const report =
+                data.data?.data?.clinical_report ??
+                data.data?.clinical_report ??
+                "❌ No report generated.";
+
+            llmReportBox.textContent = report;
+            copyBtn.style.display = "flex";
             return;
         }
+
     };
 
     // Start audio capture with larger buffer for efficiency

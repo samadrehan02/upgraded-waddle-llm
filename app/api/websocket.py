@@ -81,10 +81,7 @@ async def websocket_endpoint(ws: WebSocket):
             )
 
             session_state["structured"] = updated_state
-            session_state["last_processed_index"] = max(
-                u["index"] for u in new_utterances
-            )
-
+            session_state["last_processed_index"] = new_utterances[-1]["index"]
             last_llm_update_time = time.time()
 
         except Exception as e:
