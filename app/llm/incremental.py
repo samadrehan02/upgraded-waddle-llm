@@ -17,6 +17,12 @@ def update_structured_state(
     Incrementally update structured clinical state using new utterances.
     Returns updated structured state.
     """
+    llm_state = {
+        "symptoms": current_state.get("symptoms", []),
+        "medications": current_state.get("medications", []),
+        "diagnosis": current_state.get("diagnosis", []),
+        "advice": current_state.get("advice", []),
+    }
 
     prompt = f"""
 You are updating an existing structured medical record.
@@ -46,7 +52,7 @@ Rules:
 - Do NOT include explanations or markdown.
 
 CURRENT STATE:
-{json.dumps(current_state, ensure_ascii=False)}
+{json.dumps(llm_state, ensure_ascii=False)}
 
 NEW UTTERANCES:
 {json.dumps(new_utterances, ensure_ascii=False)}
@@ -62,7 +68,6 @@ Return the UPDATED structured state using the SAME JSON SCHEMA.
 
     raw_text = (response.text or "").strip()
 
-    # defensive markdown stripping
     if raw_text.startswith("```"):
         raw_text = raw_text.strip("`")
         if raw_text.lower().startswith("json"):

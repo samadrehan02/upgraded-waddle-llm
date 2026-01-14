@@ -18,6 +18,7 @@ from app.storage.session_store import (
 ws_router = APIRouter()
 
 SILENCE_THRESHOLD_SECONDS = 8
+MIN_UPDATE_INTERVAL = 20  # seconds
 
 
 @ws_router.websocket("/ws")
@@ -40,13 +41,60 @@ async def websocket_endpoint(ws: WebSocket):
         "last_processed_index": 0,
     }
 
-    last_speaker: str | None = None
     last_text_time = time.monotonic()
+    last_llm_update_time = 0.0 
     pause_triggered = False
+    llm_in_flight = False
     active = True
 
+    async def run_incremental_update(new_utterances: List[Dict[str, Any]]):
+        nonlocal llm_in_flight, session_state, last_llm_update_time
+
+        if not new_utterances or llm_in_flight:
+            return
+
+        now_ts = time.time()
+        if now_ts - last_llm_update_time < MIN_UPDATE_INTERVAL:
+            return  # ✅ throttle
+
+        llm_in_flight = True
+
+        try:
+            loop = asyncio.get_running_loop()
+
+            t0 = time.time()
+            print(
+                f"[SESSION {session_id}] "
+                f"INCREMENTAL UPDATE START ({len(new_utterances)} utterances)"
+            )
+
+            updated_state = await loop.run_in_executor(
+                None,
+                update_structured_state,
+                session_state["structured"],
+                new_utterances,
+            )
+
+            print(
+                f"[SESSION {session_id}] "
+                f"INCREMENTAL UPDATE DONE in {time.time() - t0:.2f}s"
+            )
+
+            session_state["structured"] = updated_state
+            session_state["last_processed_index"] = max(
+                u["index"] for u in new_utterances
+            )
+
+            last_llm_update_time = time.time()
+
+        except Exception as e:
+            print(f"[SESSION {session_id}] Incremental update failed: {e}")
+
+        finally:
+            llm_in_flight = False
+
     async def check_patient_silence():
-        nonlocal last_speaker, last_text_time, pause_triggered, active
+        nonlocal pause_triggered, last_text_time, active
 
         while active:
             await asyncio.sleep(1)
@@ -55,7 +103,6 @@ async def websocket_endpoint(ws: WebSocket):
 
             if (
                 not pause_triggered
-                and last_speaker == "patient"
                 and silence_duration >= SILENCE_THRESHOLD_SECONDS
                 and session_state["last_processed_index"] < len(transcript)
             ):
@@ -66,25 +113,7 @@ async def websocket_endpoint(ws: WebSocket):
                     if u["index"] > session_state["last_processed_index"]
                 ]
 
-                print(
-                    f"[SESSION {session_id}] "
-                    f"Incremental update with {len(new_utterances)} utterances"
-                )
-
-                try:
-                    updated_state = update_structured_state(
-                        session_state["structured"],
-                        new_utterances,
-                    )
-                    session_state["structured"] = updated_state
-                    session_state["last_processed_index"] = max(
-                        u["index"] for u in new_utterances
-                    )
-                except Exception as e:
-                    print(
-                        f"[SESSION {session_id}] "
-                        f"Incremental update failed: {e}"
-                    )
+                await run_incremental_update(new_utterances)
 
     silence_task = asyncio.create_task(check_patient_silence())
 
@@ -110,8 +139,6 @@ async def websocket_endpoint(ws: WebSocket):
                 transcript.append(utterance)
                 session_state["structured"]["utterances"].append(utterance)
 
-                # TEMP: treat all speech as patient for pause detection
-                last_speaker = "patient"
                 last_text_time = time.monotonic()
                 pause_triggered = False
 
@@ -123,28 +150,27 @@ async def websocket_endpoint(ws: WebSocket):
                 })
 
             elif event["type"] == "stop":
-                new_utterances = [
-                    u for u in transcript
-                    if u["index"] > session_state["last_processed_index"]
-                ]
+                if session_state["last_processed_index"] < len(transcript):
+                    new_utterances = [
+                        u for u in transcript
+                        if u["index"] > session_state["last_processed_index"]
+                    ]
+                    await run_incremental_update(new_utterances)
 
-                if new_utterances:
-                    try:
-                        updated_state = update_structured_state(
-                            session_state["structured"],
-                            new_utterances,
-                        )
-                        session_state["structured"] = updated_state
-                        session_state["last_processed_index"] = max(
-                            u["index"] for u in new_utterances
-                        )
-                    except Exception as e:
-                        print(
-                            f"[SESSION {session_id}] "
-                            f"Final incremental update failed: {e}"
-                        )
+                loop = asyncio.get_running_loop()
+                t0 = time.time()
+                print(f"[SESSION {session_id}] REPORT GENERATION START")
 
-                llm_result = generate_report_from_state(session_state["structured"])
+                llm_result = await loop.run_in_executor(
+                    None,
+                    generate_report_from_state,
+                    session_state["structured"],
+                )
+
+                print(
+                    f"[SESSION {session_id}] REPORT GENERATION DONE "
+                    f"in {time.time() - t0:.2f}s"
+                )
 
                 store_raw_transcript(session_id, transcript)
                 store_structured_state(session_id, session_state["structured"])
