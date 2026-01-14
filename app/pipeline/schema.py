@@ -31,6 +31,13 @@ def normalize_structured_state(
             # fallback to previous state if missing or invalid
             normalized[key] = previous[key]
 
+    normalized["patient"] = previous.get("patient", {}).copy()
+
+    if "patient" in candidate and isinstance(candidate["patient"], dict):
+        for field, value in candidate["patient"].items():
+            if value is not None:
+                normalized["patient"][field] = value
+                
     return normalized  # type: ignore
 
 def merge_utterances_with_speakers(

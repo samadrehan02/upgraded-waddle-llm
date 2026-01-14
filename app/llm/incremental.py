@@ -18,6 +18,7 @@ def update_structured_state(
     Returns updated structured state.
     """
     llm_state = {
+        "patient": current_state.get("patient",{}),
         "symptoms": current_state.get("symptoms", []),
         "medications": current_state.get("medications", []),
         "diagnosis": current_state.get("diagnosis", []),
@@ -32,6 +33,25 @@ def update_structured_state(
 
     prompt = f"""
 You are updating an existing structured medical record.
+
+Patient Demographics (STRICT):
+- Extract patient name ONLY if the patient explicitly states their own name.
+  Examples:
+  - "My name is Rahul"
+  - "मेरा नाम राहुल है"
+- Extract age ONLY if explicitly stated as a number.
+  Examples:
+  - "I am 32 years old"
+  - "मेरी उम्र 32 साल है"
+- Extract gender ONLY if explicitly stated.
+  Examples:
+  - "I am male"
+  - "मैं पुरुष हूँ"
+
+Rules:
+- Do NOT guess or infer.
+- Do NOT overwrite existing patient fields unless a new explicit statement is made.
+- If unsure, leave the field unchanged.
 
 You are given:
 1. The current structured state (JSON)
@@ -77,10 +97,17 @@ NEW UTTERANCES(raw text only):
 {json.dumps(utterance_texts, ensure_ascii=False)}
 
 Return a JSON object with the following optional fields:
+- patient
 - symptoms
 - medications
 - diagnosis
 - advice
+
+The "patient" field, if present, must be an object with:
+- name (string or null)
+- age (number or null)
+- gender (string or null)
+
 
 Include a field ONLY if it should be added or updated.
 Do NOT remove existing data.

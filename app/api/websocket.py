@@ -34,6 +34,11 @@ async def websocket_endpoint(ws: WebSocket):
 
     session_state = {
         "structured": {
+            "patient":{
+                "name": None,
+                "age": None,
+                "gender" : None,
+            },
             "utterances": [],
             "symptoms": [],
             "medications": [],
