@@ -246,17 +246,18 @@ Create a .env file:
 ```bash
 
 env
-Copy code
 ENV=dev
 GEMINI_API_KEY=your_api_key_here
 GEMINI_MODEL=gemini-1.5-pro
-Running the Application
-Development (recommended):
 ```
+## Running the Application
 
+Development (recommended):
+
+```bash
 uvicorn main:app --reload
 Open in browser:
-
+```
 ```bash
 
 http://localhost:8000
