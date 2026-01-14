@@ -24,6 +24,12 @@ def update_structured_state(
         "advice": current_state.get("advice", []),
     }
 
+    utterance_texts = [
+        u["text"]
+        for u in new_utterances
+        if "text" in u
+    ]
+
     prompt = f"""
 You are updating an existing structured medical record.
 
@@ -67,8 +73,8 @@ Then the structured update should include:
 CURRENT STATE:
 {json.dumps(llm_state, ensure_ascii=False)}
 
-NEW UTTERANCES:
-{json.dumps(new_utterances, ensure_ascii=False)}
+NEW UTTERANCES(raw text only):
+{json.dumps(utterance_texts, ensure_ascii=False)}
 
 Return a JSON object with the following optional fields:
 - symptoms
