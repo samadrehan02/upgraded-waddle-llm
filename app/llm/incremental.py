@@ -67,6 +67,22 @@ Tasks:
   - symptoms (with duration if mentioned)
   - medications (with dosage if mentioned)
   - diagnosis (ONLY if explicitly stated)
+
+If a diagnosis is mentioned:
+- Preserve the FULL phrase as spoken
+- Include location, side, or type if explicitly stated
+- Do NOT shorten or generalize
+- Do NOT infer missing details
+
+Examples:
+- "leg fracture" → "leg fracture"
+- "left leg fracture" → "left leg fracture"
+- "tibia fracture" → "tibia fracture"
+- "throat infection" → "throat infection"
+- "compound fracture" → "compound fracture"
+
+If only a generic term is spoken (e.g. "fracture"), return only that.
+
   - advice (ONLY if explicitly stated)
 
 Medical Tests / Investigations:
