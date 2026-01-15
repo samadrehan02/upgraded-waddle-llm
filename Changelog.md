@@ -117,3 +117,111 @@
 - End-to-end flow validated:
   - Speech → ASR → Structured extraction → Final report → PDF → Download
 - System is stable, auditable, and ready to be frozen or extended later.
+
+## 2026-01-15
+
+### Added
+- **Streaming AI Scribe Architecture**
+  - Real-time Hindi speech-to-text using Vosk
+  - Incremental structured data extraction during pauses
+  - Final authoritative processing on session stop
+
+- **Speaker Attribution Pipeline**
+  - Incremental best-effort speaker labeling
+  - Final deterministic speaker normalization pass
+  - Prevents patient/doctor speech contamination
+
+- **Patient Demographics Extraction**
+  - Dedicated extraction for patient name, age, and gender
+  - Extracted only from patient utterances
+  - Single-assignment, non-overwriting behavior
+  - Stabilized PDF rendering of patient details
+
+- **Medical Tests / Investigations Section**
+  - Structured extraction of investigations (e.g. X-ray, blood tests)
+  - Captures test name, result, and interpretation when stated
+  - Proper separation from diagnosis
+  - Displayed in structured state and PDF report
+
+- **Diagnosis Specificity Improvements**
+  - Preserves explicitly stated diagnosis details
+  - Supports location, side, and type (e.g. “left leg fracture”, “tibia fracture”)
+  - No inference or generalization
+
+- **Findings vs Diagnosis Separation**
+  - Investigations represent evidence
+  - Diagnosis represents clinical conclusion
+  - Prevents duplication of test results as diagnoses
+
+- **Confidence Tagging (Internal)**
+  - Per-section confidence metadata (high / medium / low)
+  - Applied to symptoms, diagnosis, medications, tests
+  - Internal-only, not exposed to UI or PDF
+
+- **Clinical PDF Report Generation**
+  - Structured doctor-style consultation note
+  - Sections:
+    - Patient details
+    - Chief complaints
+    - Investigations
+    - Diagnosis
+    - Medications
+    - Advice
+    - Clinical summary
+  - Stored per session with date-based directory structure
+
+- **Audit-First Storage**
+  - Append-only session storage
+  - Human-readable JSON outputs:
+    - raw_transcript.json
+    - structured_state.json
+    - structured_output.json
+    - metadata.json
+    - clinical_report.pdf
+
+---
+
+### Changed
+- Replaced REST-based report generation with WebSocket-only flow
+- Throttled incremental LLM calls to reduce latency and UI freezing
+- Moved heavy LLM operations to background executors
+- Ensured final report generation is fast and deterministic
+- Improved schema normalization to prevent data loss on partial failures
+
+---
+
+### Fixed
+- Latency spikes caused by overlapping incremental LLM calls
+- UI freezes due to blocking operations
+- Speaker attribution failures during throttled updates
+- Empty or partially filled structured state
+- PDF font rendering issues (Unicode / box characters)
+- Missing PDF downloads due to static routing misconfiguration
+- Broken prompt formatting caused by f-string JSON schemas
+- Incorrect session directory naming
+- Data not being persisted correctly across sessions
+
+---
+
+### Removed
+- Deprecated REST endpoint for report generation
+- Unused trust / validation layer originally meant for clinical suggestions
+- Redundant or dead pipeline components
+
+---
+
+### Architectural Notes
+- Raw transcript is immutable and remains the single source of truth
+- LLMs are treated strictly as parsers, not authorities
+- Safety, auditability, and determinism prioritized over completeness
+- Doctors remain the final decision-makers
+
+---
+
+### Status
+This system is now a **functional, stable AI medical scribe MVP** with:
+- Real-time transcription
+- Structured clinical extraction
+- Deterministic final reporting
+- Professional PDF output
+- Clear extension points for future work
