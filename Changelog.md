@@ -3,7 +3,9 @@
 ## 2026-01-14
 
 ### Architecture & Flow
+
 - Finalized a **streaming scribe architecture**:
+
   - Browser microphone → WebSocket → Vosk ASR (Hindi)
   - Incremental LLM parsing during pauses
   - Final report generation only on session stop
@@ -13,7 +15,9 @@
 ---
 
 ### WebSocket & ASR Pipeline
+
 - Stabilized WebSocket lifecycle handling:
+
   - Proper session scoping
   - Graceful disconnect handling
   - Background silence watcher task with cancellation
@@ -23,6 +27,7 @@
 ---
 
 ### Structured State & Incremental LLM
+
 - Introduced a persistent **structured state** that is updated incrementally instead of regenerated.
 - Removed unused trust layer logic after scoping system to AI scribe only.
 - Fixed multiple failure modes:
@@ -38,6 +43,7 @@
 ---
 
 ### Patient Metadata Extraction
+
 - Added explicit-only extraction of patient demographics from transcript:
   - `name`
   - `age`
@@ -54,6 +60,7 @@
 ---
 
 ### Report Generation
+
 - Decoupled:
   - Incremental extraction
   - Final clinical report generation
@@ -63,6 +70,7 @@
 ---
 
 ### PDF Generation & Storage
+
 - Implemented OPD-style PDF generation using ReportLab.
 - PDFs include:
   - Patient name, age, gender
@@ -76,6 +84,7 @@
 ---
 
 ### Storage & Audit
+
 - Enforced audit-first storage model:
   - `raw_transcript.json`
   - `structured_state.json`
@@ -88,13 +97,16 @@
 ---
 
 ### Backend Serving
+
 - Mounted `data/` directory as static files in FastAPI.
+
 - Enabled direct PDF downloads via browser without custom endpoints.
 - Fixed 404 errors on valid PDF URLs.
 
 ---
 
 ### Frontend
+
 - Simplified frontend flow:
   - Removed obsolete REST endpoint for report generation.
   - Clinical report now arrives directly via WebSocket payload.
@@ -105,6 +117,7 @@
 ---
 
 ### Stability & Cleanup
+
 - Removed dead code and unused endpoints.
 - Fixed multiple race conditions and blocking calls.
 - Ensured all long-running operations are executor-isolated.
@@ -113,6 +126,7 @@
 ---
 
 ### Status
+
 - **v1 feature-complete**
 - End-to-end flow validated:
   - Speech → ASR → Structured extraction → Final report → PDF → Download
@@ -121,6 +135,7 @@
 ## 2026-01-15
 
 ### Added
+
 - **Streaming AI Scribe Architecture**
   - Real-time Hindi speech-to-text using Vosk
   - Incremental structured data extraction during pauses
@@ -182,6 +197,7 @@
 ---
 
 ### Changed
+
 - Replaced REST-based report generation with WebSocket-only flow
 - Throttled incremental LLM calls to reduce latency and UI freezing
 - Moved heavy LLM operations to background executors
@@ -191,6 +207,7 @@
 ---
 
 ### Fixed
+
 - Latency spikes caused by overlapping incremental LLM calls
 - UI freezes due to blocking operations
 - Speaker attribution failures during throttled updates
@@ -204,6 +221,7 @@
 ---
 
 ### Removed
+
 - Deprecated REST endpoint for report generation
 - Unused trust / validation layer originally meant for clinical suggestions
 - Redundant or dead pipeline components
@@ -211,17 +229,10 @@
 ---
 
 ### Architectural Notes
+
 - Raw transcript is immutable and remains the single source of truth
 - LLMs are treated strictly as parsers, not authorities
 - Safety, auditability, and determinism prioritized over completeness
 - Doctors remain the final decision-makers
 
 ---
-
-### Status
-This system is now a **functional, stable AI medical scribe MVP** with:
-- Real-time transcription
-- Structured clinical extraction
-- Deterministic final reporting
-- Professional PDF output
-- Clear extension points for future work
