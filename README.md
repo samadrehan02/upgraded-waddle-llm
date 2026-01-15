@@ -21,23 +21,7 @@ It is a **documentation assistant** designed to reduce manual note-taking.
 
 ## Core Architecture
 
-### High-Level Flow
-
-Browser Microphone
-        ↓ (WebSocket, PCM audio)
-FastAPI Server
-        ↓
-Vosk ASR (Hindi)
-        ↓
-Raw Transcript (Immutable)
-        ↓
-Gemini LLM (Parser Only)
-        ↓
-Trust & Validation Layer
-        ↓
-Structured Output / Draft Report
-        ↓
-Audit-First Storage
+![alt text](https://github.com/samadrehan02/upgraded-waddle-llm/blob/main/flow.png)
 
 ## Architecture Layers
 
