@@ -67,7 +67,6 @@ Tasks:
   - symptoms (with duration if mentioned)
   - medications (with dosage if mentioned)
   - diagnosis (ONLY if explicitly stated)
-
 If a diagnosis is mentioned:
 - Preserve the FULL phrase as spoken
 - Include location, side, or type if explicitly stated
