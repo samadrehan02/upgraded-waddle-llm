@@ -2,7 +2,6 @@ from datetime import datetime
 from typing import List, Dict, Any
 import time
 import asyncio
-import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.asr.vosk_adapter import run_vosk_asr_stream
@@ -15,6 +14,7 @@ from app.storage.session_store import (
     store_metadata,
 )
 from app.storage.session_store import store_pdf_report
+from app.llm.speaker import assign_speakers, apply_speaker_labels
 
 ws_router = APIRouter()
 
@@ -66,7 +66,7 @@ async def websocket_endpoint(ws: WebSocket):
 
         now_ts = time.time()
         if not force and now_ts - last_llm_update_time < MIN_UPDATE_INTERVAL:
-            return  # ✅ throttle
+            return 
 
         llm_in_flight = True
 
@@ -170,6 +170,17 @@ async def websocket_endpoint(ws: WebSocket):
 
                 loop = asyncio.get_running_loop()
                 t0 = time.time()
+                speaker_labels = await loop.run_in_executor(
+                    None,
+                    assign_speakers,
+                    session_state["structured"]["utterances"],
+                )
+
+                session_state["structured"]["utterances"] = apply_speaker_labels(
+                    session_state["structured"]["utterances"],
+                    speaker_labels,
+                )
+                
                 print(f"[SESSION {session_id}] REPORT GENERATION START")
 
                 llm_result = await loop.run_in_executor(
