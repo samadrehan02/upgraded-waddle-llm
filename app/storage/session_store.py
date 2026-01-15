@@ -14,7 +14,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 BASE_DIR = Path("data/sessions")
 
 pdfmetrics.registerFont(
-    TTFont("DejaVu", "static/fonts/DejaVuSans.ttf")
+    TTFont("NotoDeva", "static/fonts/NotoSansDevanagari-Regular.ttf")
 )
 
 def _session_dir(session_id: str) -> Path:
@@ -65,7 +65,7 @@ def store_pdf_report(
 
     # Ensure Unicode font everywhere
     for style in styles.byName.values():
-        style.fontName = "DejaVu"
+        style.fontName = "NotoDeva"
 
     title_style = ParagraphStyle(
         "Title",
@@ -107,7 +107,7 @@ def store_pdf_report(
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
                 ("BACKGROUND", (0, 0), (0, -1), colors.whitesmoke),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("FONT", (0, 0), (-1, -1), "DejaVu"),
+                ("FONT", (0, 0), (-1, -1), "NotoDeva"),
             ]
         )
     )
