@@ -21,20 +21,34 @@ It is a **documentation assistant** designed to reduce manual note-taking.
 
 ## Core Architecture
 
-![alt text](https://github.com/samadrehan02/upgraded-waddle-llm/blob/main/flow.png)
+### High-Level Flow
+
+Browser Microphone
+        ↓ (WebSocket, PCM audio)
+FastAPI Server
+        ↓
+Vosk ASR (Hindi)
+        ↓
+Raw Transcript (Immutable)
+        ↓
+Gemini LLM (Parser Only)
+        ↓
+Trust & Validation Layer
+        ↓
+Structured Output / Draft Report
+        ↓
+Audit-First Storage
 
 ## Architecture Layers
 
 ### 1. Frontend (Browser)
 
 **Files**
-
 - `templates/index.html`
 - `static/app.js`
 - `static/style.css`
 
 **Responsibilities**
-
 - Capture microphone audio
 - Convert audio to 16-bit PCM @ 16 kHz
 - Stream audio via WebSocket
@@ -53,11 +67,9 @@ It is a **documentation assistant** designed to reduce manual note-taking.
 ### 2. Transport Layer (WebSocket)
 
 **File**
-
 - `app/api/websocket.py`
 
 **Responsibilities**
-
 - Session creation (`session_id`)
 - Streaming audio → ASR
 - Emitting events to UI:
@@ -71,15 +83,12 @@ It is a **documentation assistant** designed to reduce manual note-taking.
 ### 3. Speech Recognition (ASR)
 
 **File**
-
 - `app/asr/vosk_adapter.py`
 
 **Technology**
-
 - Vosk Hindi model (`vosk-model-hi-0.22`)
 
 **Behavior**
-
 - Emits:
   - partial hypotheses (low latency)
   - finalized utterances (committed)
@@ -101,24 +110,20 @@ This transcript:
 
 ## 5. LLM Normalization Layer
 
-### File
+**File**
+app/llm/gemini.py
 
-- `app/llm/gemini.py`
-
-### Role
-
+**Role**  
 Parse the raw transcript into structured clinical data.
 
-### Tasks
-
+**Tasks**
 - Speaker classification (`patient / doctor / unknown`)
 - Symptom extraction (with duration)
 - Medication extraction (with dosage)
 - Diagnosis detection (explicit only)
 - Generate a short Hindi clinical report
 
-### Hard Constraints
-
+**Hard Constraints**
 - Temperature = `0.0`
 - Strict JSON schema
 - No markdown
@@ -127,25 +132,25 @@ Parse the raw transcript into structured clinical data.
 
 The LLM is treated strictly as a **parser**, not an authority.
 
+
 ## 6. Trust & Validation Layer
 
-### File
-
+**File**
 app/pipeline/trust.py
 
-### Purpose
+markdown
+Copy code
 
+**Purpose**  
 Decide whether LLM output is allowed to be surfaced.
 
-### Rules
-
+**Rules**
 - Patient speech must exist
 - Doctor speech required for medications and diagnoses
 - Symptoms must be grounded in patient speech
 - Violations downgrade or block output
 
-### Decisions
-
+**Decisions**
 - `use_llm` – full report allowed
 - `partial_llm` – symptoms only
 - `ignore_llm` – nothing shown
@@ -156,13 +161,12 @@ Safety always wins over completeness.
 
 ## 7. Evaluation & Normalization
 
-### Files
+**Files**
+app/pipeline/normalize.py
+app/pipeline/evaluate.py
 
-- `app/pipeline/normalize.py`
-- `app/pipeline/evaluate.py`
 
-### Role
-
+**Role**
 - Wrap LLM output into a single evaluation record
 - Attach trust decisions and metadata
 - Produce an auditable result per session
@@ -171,18 +175,15 @@ Safety always wins over completeness.
 
 ## 8. Persistence (Audit-First)
 
-### File
+**File**
+app/storage/session_store.py
 
-- `app/storage/session_store.py`
-
-### Stored Per Session
-
+**Stored Per Session**
 - `raw_transcript.json`
 - `structured_output.json`
 - `metadata.json`
 
-### Properties
-
+**Properties**
 - Append-only
 - Date-partitioned
 - Human-readable JSON
@@ -216,42 +217,32 @@ Doctors remain the final authority.
 ## Installation
 
 ### 1. Clone the repository
-
 ```bash
 git clone https://github.com/samadrehan02/upgraded-waddle-llm
 cd upgraded-waddle-llm
 ```
-
 ### 2. Create and activate virtual environment
-
 ```bash
 python -m venv .venv
 source .venv/bin/activate    # Linux / macOS
 # OR
 .venv\Scripts\activate       # Windows
 ```
-
 ### 3. Install dependencies
-
 ```bash
 pip install -r requirements.txt
 ```
-
 ### 4. Download Vosk Hindi model
 
 Download and extract:
 
 vosk-model-hi-0.22
 Place it at:
-
 ```bash
 models/vosk/hi/vosk-model-hi-0.22/
 ```
-
 ### 5. Configure environment variables
-
 Create a .env file:
-
 ```bash
 
 env
@@ -259,7 +250,6 @@ ENV=dev
 GEMINI_API_KEY=your_api_key_here
 GEMINI_MODEL=gemini-3-flash-preview (or whichever you want, 2.5 Pro, and flash preview work best)
 ```
-
 ## Running the Application
 
 Development (recommended):
@@ -267,23 +257,19 @@ Development (recommended):
 ```bash
 uvicorn main:app --reload
 ```
-
 Open in browser:
 
 ```bash
 
 http://localhost:8000
 ```
-
 Alternative (no auto-reload):
 
 ```bash
 
 python main.py
 ```
-
 ## Project Structure
-
 ```bash
 
 .
@@ -316,5 +302,4 @@ python main.py
 - Auditability over convenience
 
 ## Status
-
 This project is a functional proof-of-concept with a stable, extensible architecture suitable for further hardening and productionization.

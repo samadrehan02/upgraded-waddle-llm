@@ -1,3 +1,4 @@
+/* Modern Material Design Variables */
 :root {
     --primary: #0ea5e9;
     --primary-dark: #0284c7;
@@ -45,6 +46,9 @@ body {
     padding: 32px 24px;
 }
 
+/* ========================================
+   HEADER - FIXED ALIGNMENT
+   ======================================== */
 header {
     margin-bottom: 32px;
 }
@@ -96,6 +100,9 @@ header {
     line-height: 1.4;
 }
 
+/* ========================================
+   CONTROL PANEL - FIXED ALIGNMENT
+   ======================================== */
 .control-panel {
     background: var(--card);
     border-radius: var(--radius-lg);
@@ -155,6 +162,9 @@ header {
     line-height: 1;
 }
 
+/* ========================================
+   BUTTONS - FIXED ALIGNMENT
+   ======================================== */
 .controls {
     display: flex;
     gap: 12px;
@@ -229,6 +239,9 @@ button:active:not(:disabled) {
     color: white;
 }
 
+/* ========================================
+   PANELS
+   ======================================== */
 .panels {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -259,6 +272,9 @@ button:active:not(:disabled) {
     border: 2px solid var(--primary-light);
 }
 
+/* ========================================
+   PANEL HEADER - FIXED ALIGNMENT
+   ======================================== */
 .panel-header {
     display: flex;
     align-items: center;
@@ -294,6 +310,9 @@ button:active:not(:disabled) {
     line-height: 1;
 }
 
+/* ========================================
+   SCROLL BOX
+   ======================================== */
 .scroll-box {
     flex: 1;
     overflow-y: auto;
@@ -322,6 +341,9 @@ button:active:not(:disabled) {
     background: var(--text-muted);
 }
 
+/* ========================================
+   EMPTY STATE - FIXED CENTERING
+   ======================================== */
 .empty-state {
     display: flex;
     flex-direction: column;
@@ -349,6 +371,9 @@ button:active:not(:disabled) {
     margin: 0;
 }
 
+/* ========================================
+   TRANSCRIPT LINE
+   ======================================== */
 .transcript-line {
     padding: 10px 12px;
     margin-bottom: 8px;
@@ -378,6 +403,9 @@ button:active:not(:disabled) {
     font-family: 'SF Mono', monospace;
 }
 
+/* ========================================
+   CODE DISPLAY
+   ======================================== */
 .code {
     font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
     font-size: 13px;
@@ -386,6 +414,9 @@ button:active:not(:disabled) {
     line-height: 1.6;
 }
 
+/* ========================================
+   OPD NOTE
+   ======================================== */
 .opd-note {
     background: white;
     font-size: 15px;
@@ -400,6 +431,9 @@ button:active:not(:disabled) {
     font-weight: 600;
 }
 
+/* ========================================
+   RESPONSIVE
+   ======================================== */
 @media (max-width: 1024px) {
     .panels {
         grid-template-columns: 1fr;

@@ -5,7 +5,6 @@ from app.models import StructuredState
 REQUIRED_KEYS = {
     "utterances",
     "symptoms",
-    "tests",
     "medications",
     "diagnosis",
     "advice",
@@ -38,7 +37,7 @@ def normalize_structured_state(
         for field, value in candidate["patient"].items():
             if value is not None:
                 normalized["patient"][field] = value
-
+                
     return normalized  # type: ignore
 
 def merge_utterances_with_speakers(

@@ -20,7 +20,6 @@ def update_structured_state(
     llm_state = {
         "patient": current_state.get("patient",{}),
         "symptoms": current_state.get("symptoms", []),
-        "tests": current_state.get("tests",[]),
         "medications": current_state.get("medications", []),
         "diagnosis": current_state.get("diagnosis", []),
         "advice": current_state.get("advice", []),
@@ -67,43 +66,7 @@ Tasks:
   - symptoms (with duration if mentioned)
   - medications (with dosage if mentioned)
   - diagnosis (ONLY if explicitly stated)
-If a diagnosis is mentioned:
-- Preserve the FULL phrase as spoken
-- Include location, side, or type if explicitly stated
-- Do NOT shorten or generalize
-- Do NOT infer missing details
-
-Examples:
-- "leg fracture" → "leg fracture"
-- "left leg fracture" → "left leg fracture"
-- "tibia fracture" → "tibia fracture"
-- "throat infection" → "throat infection"
-- "compound fracture" → "compound fracture"
-
-If only a generic term is spoken (e.g. "fracture"), return only that.
-
   - advice (ONLY if explicitly stated)
-
-Medical Tests / Investigations:
-- Extract medical tests ONLY if explicitly mentioned.
-- Capture:
-  - test_name (string)
-  - result (string or null)
-  - note (string or null)
-
-Examples:
-- "blood test me white cell count kam aaya hai"
-  → test_name: "Blood test (WBC)"
-  → result: "low"
-- "x-ray me fracture dikha"
-  → test_name: "X-ray"
-  → result: "fracture seen"
-
-Rules:
-- Do NOT guess normal ranges.
-- Do NOT infer diagnoses from test results.
-- Do NOT invent test names.
-- If result is unclear, store note instead.
 
 Rules:
 - Update the structured state based on the new utterances only.
@@ -136,17 +99,9 @@ NEW UTTERANCES(raw text only):
 Return a JSON object with the following optional fields:
 - patient
 - symptoms
-- tests
 - medications
 - diagnosis
 - advice
-
-The "tests" field, if present, must be a list of:
-{{
-  "test_name": "string",
-  "result": "string or null",
-  "note": "string or null"
-}}
 
 The "patient" field, if present, must be an object with:
 - name (string or null)
