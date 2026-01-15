@@ -15,6 +15,7 @@ from app.storage.session_store import (
 )
 from app.storage.session_store import store_pdf_report
 from app.llm.speaker import assign_speakers, apply_speaker_labels
+from app.llm.patient import extract_patient_demographics
 
 ws_router = APIRouter()
 
@@ -170,6 +171,7 @@ async def websocket_endpoint(ws: WebSocket):
 
                 loop = asyncio.get_running_loop()
                 t0 = time.time()
+
                 speaker_labels = await loop.run_in_executor(
                     None,
                     assign_speakers,
@@ -181,6 +183,20 @@ async def websocket_endpoint(ws: WebSocket):
                     speaker_labels,
                 )
                 
+                patient = session_state["structured"]["patient"]
+
+                if not patient["name"] or not patient["age"] or not patient["gender"]:
+                    demographics = await loop.run_in_executor(
+                        None,
+                        extract_patient_demographics,
+                        session_state["structured"]["utterances"],
+                    )
+
+                    for key in ["name", "age", "gender"]:
+                        if patient.get(key) is None:
+                            patient[key] = demographics.get(key)
+
+
                 print(f"[SESSION {session_id}] REPORT GENERATION START")
 
                 llm_result = await loop.run_in_executor(
