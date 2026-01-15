@@ -28,3 +28,16 @@ class StructuredState(TypedDict):
     medications: List[Medication]
     diagnosis: List[str]
     advice: List[str]
+    
+class Investigation(TypedDict):
+    name: str
+    value: Optional[str]
+
+class StructuredState(TypedDict):
+    utterances: List[Utterance]
+    symptoms: List[Symptom]
+    medications: List[Medication]
+    diagnosis: List[str]
+    advice: List[str]
+    investigations: List[Investigation]
+    tests: List[str]

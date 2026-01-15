@@ -2,7 +2,6 @@ from datetime import datetime
 from typing import List, Dict, Any
 import time
 import asyncio
-import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.asr.vosk_adapter import run_vosk_asr_stream
@@ -13,8 +12,8 @@ from app.storage.session_store import (
     store_structured_output,
     store_structured_state,
     store_metadata,
+    store_pdf_report,
 )
-from app.storage.session_store import store_pdf_report
 
 ws_router = APIRouter()
 
@@ -34,38 +33,40 @@ async def websocket_endpoint(ws: WebSocket):
 
     session_state = {
         "structured": {
-            "patient":{
+            "patient": {
                 "name": None,
                 "age": None,
-                "gender" : None,
+                "gender": None,
             },
             "utterances": [],
             "symptoms": [],
             "medications": [],
             "diagnosis": [],
             "advice": [],
+            "investigations": [],
+            "tests": [],
         },
         "last_processed_index": 0,
     }
 
     last_text_time = time.monotonic()
-    last_llm_update_time = 0.0 
+    last_llm_update_time = 0.0
     pause_triggered = False
     llm_in_flight = False
     active = True
 
     async def run_incremental_update(
-            new_utterances: List[Dict[str,Any]],
-            force: bool = False,
+        new_utterances: List[Dict[str, Any]],
+        force: bool = False,
     ):
-        nonlocal llm_in_flight, session_state, last_llm_update_time
+        nonlocal llm_in_flight, last_llm_update_time
 
         if not new_utterances or llm_in_flight:
             return
 
         now_ts = time.time()
         if not force and now_ts - last_llm_update_time < MIN_UPDATE_INTERVAL:
-            return  # ✅ throttle
+            return
 
         llm_in_flight = True
 
@@ -165,7 +166,7 @@ async def websocket_endpoint(ws: WebSocket):
                         u for u in transcript
                         if u["index"] > session_state["last_processed_index"]
                     ]
-                    await run_incremental_update(new_utterances, force = True)
+                    await run_incremental_update(new_utterances, force=True)
 
                 loop = asyncio.get_running_loop()
                 t0 = time.time()
@@ -176,16 +177,29 @@ async def websocket_endpoint(ws: WebSocket):
                     generate_report_from_state,
                     session_state["structured"],
                 )
+
+                if "data" not in llm_result:
+                    print(
+                        f"[SESSION {session_id}] REPORT GENERATION FAILED:",
+                        llm_result,
+                    )
+
+                clinical_report = (
+                    llm_result.get("data", {}).get("clinical_report", "")
+                    if isinstance(llm_result, dict)
+                    else ""
+                )
+
                 print(f"[SESSION {session_id}] PDF GENERATION START")
 
                 pdf_path = store_pdf_report(
                     session_id,
                     session_date=session_date,
                     structured_state=session_state["structured"],
-                    clinical_report=llm_result["data"]["clinical_report"]
+                    clinical_report=clinical_report,
                 )
-                print(f"[SESSION {session_id}] PDF GENERATION DONE: {pdf_path}")
 
+                print(f"[SESSION {session_id}] PDF GENERATION DONE: {pdf_path}")
                 print(
                     f"[SESSION {session_id}] REPORT GENERATION DONE "
                     f"in {time.time() - t0:.2f}s"
@@ -209,8 +223,9 @@ async def websocket_endpoint(ws: WebSocket):
                 await ws.send_json({
                     "type": "structured",
                     "data": llm_result,
-                    "pdf": f"/data/sessions/{session_date}/{session_id}/clinical_report.pdf"
+                    "pdf": f"/data/sessions/{session_date}/{session_id}/clinical_report.pdf",
                 })
+
                 transcript.clear()
 
     except WebSocketDisconnect:

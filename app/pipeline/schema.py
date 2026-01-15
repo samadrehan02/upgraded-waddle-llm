@@ -8,7 +8,9 @@ REQUIRED_KEYS = {
     "medications",
     "diagnosis",
     "advice",
-}
+    "investigations",
+    "tests",
+    }
 
 
 def normalize_structured_state(

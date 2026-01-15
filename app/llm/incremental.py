@@ -23,6 +23,8 @@ def update_structured_state(
         "medications": current_state.get("medications", []),
         "diagnosis": current_state.get("diagnosis", []),
         "advice": current_state.get("advice", []),
+        "investigations": current_state.get("investigations", []),
+        "tests": current_state.get("tests", []),
     }
 
     utterance_texts = [
@@ -67,6 +69,23 @@ Tasks:
   - medications (with dosage if mentioned)
   - diagnosis (ONLY if explicitly stated)
   - advice (ONLY if explicitly stated)
+  - investigations (vitals or measurements with values)
+  - tests (investigations advised by the doctor)
+
+Investigations:
+- Extract only objective measurements stated explicitly
+- Examples:
+  - "temperature is 100"
+  - "BP 120 by 80"
+- Store as:
+  {{ "name": "body temperature", "value": "100 F" }}
+
+Tests:
+- Extract ONLY when doctor advises tests
+- Examples:
+  - "blood test karwa liye"
+  - "CBC karwa lo"
+- Normalize to English test names
 
 Rules:
 - Update the structured state based on the new utterances only.
@@ -102,6 +121,8 @@ Return a JSON object with the following optional fields:
 - medications
 - diagnosis
 - advice
+- investigations
+- tests
 
 The "patient" field, if present, must be an object with:
 - name (string or null)

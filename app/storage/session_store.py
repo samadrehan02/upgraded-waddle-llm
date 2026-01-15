@@ -98,6 +98,20 @@ def store_pdf_report(session_id: str, session_date: str, structured_state: dict,
             if s.get("duration"):
                 text += f" ({s['duration']})"
             story.append(Paragraph(text, body_style))
+     # Investigations
+    if structured_state.get("investigations"):
+        story.append(Paragraph("Investigations", section_style))
+        for i in structured_state["investigations"]:
+            line = f"- {i['name']}"
+            if i.get("value"):
+                line += f": {i['value']}"
+            story.append(Paragraph(line, body_style))
+
+    # Tests
+    if structured_state.get("tests"):
+        story.append(Paragraph("Tests Advised", section_style))
+        for t in structured_state["tests"]:
+            story.append(Paragraph(f"- {t}", body_style))
 
     # Diagnosis
     if structured_state.get("diagnosis"):
