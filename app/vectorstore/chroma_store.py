@@ -1,6 +1,5 @@
 import chromadb
 from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
 from typing import Dict, Any
 import json
 
@@ -14,8 +13,6 @@ client = chromadb.Client(
 collection = client.get_or_create_collection(
     name="clinical_knowledge"
 )
-
-encoder = SentenceTransformer("all-MiniLM-L6-v2")
 
 def build_document(structured_state: Dict[str, Any]) -> str:
     parts = []
@@ -49,8 +46,6 @@ def store_consultation(
     if not document.strip():
         return  # nothing useful
 
-    embedding = encoder.encode(document).tolist()
-
     metadata = {
         "diagnosis": structured_state.get("diagnosis", []),
         "tests": structured_state.get("tests", []),
@@ -61,7 +56,6 @@ def store_consultation(
     collection.add(
         ids=[session_id],
         documents=[document],
-        embeddings=[embedding],
         metadatas=[metadata],
     )
 

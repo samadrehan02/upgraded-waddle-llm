@@ -258,7 +258,7 @@ async def websocket_endpoint(ws: WebSocket):
                 )
                 store_consultation(
                     session_id=session_id,
-                    structured_state=session_state["structured",]
+                    structured_state=session_state["structured"]
                 )
                 await ws.send_json({
                     "type": "structured",
