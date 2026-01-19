@@ -17,8 +17,35 @@ from app.storage.session_store import (
 
 ws_router = APIRouter()
 
-SILENCE_THRESHOLD_SECONDS = 8
+SILENCE_THRESHOLD_SECONDS = 12
 MIN_UPDATE_INTERVAL = 20  # seconds
+
+EXTRACT_TRIGGERS = (
+    # symptoms
+    "pain", "fever", "cough", "cold", "vomit", "headache",
+    "दर्द", "बुखार", "खांसी",
+
+    # duration / numbers
+    "day", "days", "din", "saal", "year",
+
+    # medications
+    "tablet", "medicine", "mg", "dose",
+
+    # investigations
+    "bp", "pressure", "temperature", "temp",
+    "blood pressure",
+
+    # tests
+    "test", "जांच", "karwa", "करवा",
+)
+
+
+def worth_llm_call(utterances: List[Dict[str, Any]]) -> bool:
+    for u in utterances:
+        text = u.get("text", "").lower()
+        if any(trigger in text for trigger in EXTRACT_TRIGGERS):
+            return True
+    return False
 
 
 @ws_router.websocket("/ws")
@@ -62,6 +89,12 @@ async def websocket_endpoint(ws: WebSocket):
         nonlocal llm_in_flight, last_llm_update_time
 
         if not new_utterances or llm_in_flight:
+            return
+
+        if not force and not worth_llm_call(new_utterances):
+            session_state["last_processed_index"] = max(
+                u["index"] for u in new_utterances if "index" in u
+            )
             return
 
         now_ts = time.time()
