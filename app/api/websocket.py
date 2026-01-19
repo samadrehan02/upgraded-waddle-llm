@@ -19,6 +19,7 @@ ws_router = APIRouter()
 
 SILENCE_THRESHOLD_SECONDS = 12
 MIN_UPDATE_INTERVAL = 20  # seconds
+MIN_UTTERANCES_PER_UPDATE = 3 
 
 EXTRACT_TRIGGERS = (
     # symptoms
@@ -89,6 +90,9 @@ async def websocket_endpoint(ws: WebSocket):
         nonlocal llm_in_flight, last_llm_update_time
 
         if not new_utterances or llm_in_flight:
+            return
+
+        if not force and len(new_utterances) < MIN_UTTERANCES_PER_UPDATE:
             return
 
         if not force and not worth_llm_call(new_utterances):
