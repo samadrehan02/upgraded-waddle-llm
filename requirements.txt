@@ -6,3 +6,5 @@ pyaudio
 fastapi
 uvicorn
 pydantic
+chromadb
+sentence-transformers

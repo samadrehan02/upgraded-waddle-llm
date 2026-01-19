@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 import time
 import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-
+from app.vectorstore.chroma_store import store_consultation
 from app.asr.vosk_adapter import run_vosk_asr_stream
 from app.llm.incremental import update_structured_state
 from app.llm.gemini import generate_report_from_state
@@ -256,7 +256,10 @@ async def websocket_endpoint(ws: WebSocket):
                         "patient": session_state["structured"]["patient"],
                     },
                 )
-
+                store_consultation(
+                    session_id=session_id,
+                    structured_state=session_state["structured",]
+                )
                 await ws.send_json({
                     "type": "structured",
                     "data": llm_result,
