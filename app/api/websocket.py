@@ -4,6 +4,7 @@ import time
 import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.datasets.jsonl_export import export_session
 from app.asr.vosk_adapter import run_vosk_asr_stream
 from app.llm.incremental import update_structured_state
 from app.llm.gemini import generate_report_from_state
@@ -243,6 +244,11 @@ async def websocket_endpoint(ws: WebSocket):
                 )
 
                 store_consultation(
+                    session_id=session_id,
+                    structured_state=session_state["structured"],
+                )
+
+                export_session(
                     session_id=session_id,
                     structured_state=session_state["structured"],
                 )
