@@ -5,7 +5,7 @@ __pycache__/
 *.pyd
 .venv/
 venv/
-
+test.py
 # Environment
 .env
 

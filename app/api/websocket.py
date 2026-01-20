@@ -3,10 +3,12 @@ from typing import List, Dict, Any
 import time
 import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.vectorstore.chroma_store import store_consultation
+
 from app.asr.vosk_adapter import run_vosk_asr_stream
 from app.llm.incremental import update_structured_state
 from app.llm.gemini import generate_report_from_state
+from app.vectorstore.chroma_store import store_consultation
+from app.vectorstore.suggestions import generate_system_suggestions
 from app.storage.session_store import (
     store_raw_transcript,
     store_structured_output,
@@ -18,25 +20,16 @@ from app.storage.session_store import (
 ws_router = APIRouter()
 
 SILENCE_THRESHOLD_SECONDS = 12
-MIN_UPDATE_INTERVAL = 20  # seconds
-MIN_UTTERANCES_PER_UPDATE = 3 
+MIN_UPDATE_INTERVAL = 20
+MIN_UTTERANCES_PER_UPDATE = 3
 
 EXTRACT_TRIGGERS = (
-    # symptoms
     "pain", "fever", "cough", "cold", "vomit", "headache",
     "दर्द", "बुखार", "खांसी",
-
-    # duration / numbers
     "day", "days", "din", "saal", "year",
-
-    # medications
     "tablet", "medicine", "mg", "dose",
-
-    # investigations
     "bp", "pressure", "temperature", "temp",
     "blood pressure",
-
-    # tests
     "test", "जांच", "karwa", "करवा",
 )
 
@@ -61,11 +54,7 @@ async def websocket_endpoint(ws: WebSocket):
 
     session_state = {
         "structured": {
-            "patient": {
-                "name": None,
-                "age": None,
-                "gender": None,
-            },
+            "patient": {"name": None, "age": None, "gender": None},
             "utterances": [],
             "symptoms": [],
             "medications": [],
@@ -80,16 +69,17 @@ async def websocket_endpoint(ws: WebSocket):
     last_text_time = time.monotonic()
     last_llm_update_time = 0.0
     pause_triggered = False
-    llm_in_flight = False
     active = True
+
+    llm_lock = asyncio.Lock()
 
     async def run_incremental_update(
         new_utterances: List[Dict[str, Any]],
         force: bool = False,
     ):
-        nonlocal llm_in_flight, last_llm_update_time
+        nonlocal last_llm_update_time
 
-        if not new_utterances or llm_in_flight:
+        if not new_utterances:
             return
 
         if not force and len(new_utterances) < MIN_UTTERANCES_PER_UPDATE:
@@ -105,40 +95,36 @@ async def websocket_endpoint(ws: WebSocket):
         if not force and now_ts - last_llm_update_time < MIN_UPDATE_INTERVAL:
             return
 
-        llm_in_flight = True
+        async with llm_lock:
+            try:
+                loop = asyncio.get_running_loop()
+                t0 = time.time()
 
-        try:
-            loop = asyncio.get_running_loop()
+                print(
+                    f"[SESSION {session_id}] "
+                    f"INCREMENTAL UPDATE START ({len(new_utterances)} utterances)"
+                )
 
-            t0 = time.time()
-            print(
-                f"[SESSION {session_id}] "
-                f"INCREMENTAL UPDATE START ({len(new_utterances)} utterances)"
-            )
+                updated_state = await loop.run_in_executor(
+                    None,
+                    update_structured_state,
+                    session_state["structured"],
+                    new_utterances,
+                )
 
-            updated_state = await loop.run_in_executor(
-                None,
-                update_structured_state,
-                session_state["structured"],
-                new_utterances,
-            )
+                print(
+                    f"[SESSION {session_id}] "
+                    f"INCREMENTAL UPDATE DONE in {time.time() - t0:.2f}s"
+                )
 
-            print(
-                f"[SESSION {session_id}] "
-                f"INCREMENTAL UPDATE DONE in {time.time() - t0:.2f}s"
-            )
+                session_state["structured"] = updated_state
+                session_state["last_processed_index"] = max(
+                    u["index"] for u in new_utterances if "index" in u
+                )
+                last_llm_update_time = time.time()
 
-            session_state["structured"] = updated_state
-            session_state["last_processed_index"] = max(
-                u["index"] for u in new_utterances if "index" in u
-            )
-            last_llm_update_time = time.time()
-
-        except Exception as e:
-            print(f"[SESSION {session_id}] Incremental update failed: {e}")
-
-        finally:
-            llm_in_flight = False
+            except Exception as e:
+                print(f"[SESSION {session_id}] Incremental update failed: {e}")
 
     async def check_patient_silence():
         nonlocal pause_triggered, last_text_time, active
@@ -150,7 +136,6 @@ async def websocket_endpoint(ws: WebSocket):
 
             if (
                 not pause_triggered
-                and not llm_in_flight
                 and silence_duration >= SILENCE_THRESHOLD_SECONDS
                 and session_state["last_processed_index"] < len(transcript)
             ):
@@ -198,6 +183,9 @@ async def websocket_endpoint(ws: WebSocket):
                 })
 
             elif event["type"] == "stop":
+                active = False
+                silence_task.cancel()
+
                 if session_state["last_processed_index"] < len(transcript):
                     new_utterances = [
                         u for u in transcript
@@ -216,10 +204,7 @@ async def websocket_endpoint(ws: WebSocket):
                 )
 
                 if "data" not in llm_result:
-                    print(
-                        f"[SESSION {session_id}] REPORT GENERATION FAILED:",
-                        llm_result,
-                    )
+                    print(f"[SESSION {session_id}] REPORT GENERATION FAILED:", llm_result)
 
                 clinical_report = (
                     llm_result.get("data", {}).get("clinical_report", "")
@@ -256,14 +241,23 @@ async def websocket_endpoint(ws: WebSocket):
                         "patient": session_state["structured"]["patient"],
                     },
                 )
+
                 store_consultation(
                     session_id=session_id,
-                    structured_state=session_state["structured"]
+                    structured_state=session_state["structured"],
                 )
+
+                system_suggestions = await loop.run_in_executor(
+                    None,
+                    generate_system_suggestions,
+                    session_state["structured"],
+                )
+
                 await ws.send_json({
                     "type": "structured",
                     "data": llm_result,
                     "pdf": f"/data/sessions/{session_date}/{session_id}/clinical_report.pdf",
+                    "system_suggestions": system_suggestions,
                 })
 
                 transcript.clear()
