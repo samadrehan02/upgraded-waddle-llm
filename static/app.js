@@ -14,6 +14,8 @@ const statusText = document.getElementById("statusText");
 const transcriptCount = document.getElementById("transcriptCount");
 const copyBtn = document.getElementById("copyBtn");
 const pdfBtn = document.getElementById("pdfBtn");
+const suggestionsBox = document.getElementById("suggestions");
+const suggestionsCount = document.getElementById("suggestionsCount");
 
 let lineCount = 0;
 let partialElement = null;
@@ -78,6 +80,10 @@ async function startRecording() {
 
             llmReportBox.textContent =
                 data.clinical_report || "No report generated.";
+
+            if (data.system_suggestions){
+                renderSuggestions(data.system_suggestions);
+            }
 
             copyBtn.style.display = "flex";
 
@@ -159,6 +165,40 @@ function appendTranscript(time, text) {
     lineCount++;
     transcriptCount.textContent =
         `${lineCount} line${lineCount !== 1 ? "s" : ""}`;
+}
+
+function renderSuggestions(data) {
+    if (!data || data.based_on_cases === 0) {
+        suggestionsBox.innerHTML =
+            "<div class='empty-state'><p>No suggestions available</p></div>";
+        suggestionsCount.textContent = "0 cases";
+        return;
+    }
+
+    suggestionsCount.textContent = `${data.based_on_cases} cases`;
+
+    let html = "";
+
+    function renderList(title, items) {
+        if (!items || items.length === 0) return "";
+
+        let list = items
+            .map(i => `• ${i.name} (${i.count})`)
+            .join("<br>");
+
+        return `
+            <div style="margin-bottom:12px;">
+                <strong>${title}</strong><br>
+                ${list}
+            </div>
+        `;
+    }
+
+    html += renderList("Likely Diagnoses", data.diagnosis);
+    html += renderList("Suggested Tests", data.tests);
+    html += renderList("Common Medications", data.medications);
+
+    suggestionsBox.innerHTML = html || "<p>No ranked suggestions.</p>";
 }
 
 function floatTo16BitPCM(float32Array) {

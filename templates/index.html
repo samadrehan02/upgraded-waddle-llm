@@ -82,6 +82,22 @@
             </div>
         </div>
 
+        <!-- System Suggestions -->
+        <div class="panel panel-secondary">
+            <div class="panel-header">
+                <span class="material-icons">lightbulb</span>
+                <h2>System Suggestions</h2>
+                <span class="panel-badge" id="suggestionsCount">0 cases</span>
+            </div>
+
+            <div class="scroll-box" id="suggestions">
+                <div class="empty-state">
+                    <span class="material-icons">insights</span>
+                    <p>Suggestions will appear after finalization</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Final Clinical Report -->
         <div class="panel panel-tertiary">
             <div class="panel-header">
@@ -101,7 +117,7 @@
                 </div>
             </div>
 
-            <div class="scroll-box" id="llmReport">
+            <div class="scroll-box opd-note" id="llmReport">
                 <div class="empty-state">
                     <span class="material-icons">note_alt</span>
                     <p>Final clinical report will appear here</p>
