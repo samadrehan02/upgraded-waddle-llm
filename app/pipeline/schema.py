@@ -1,7 +1,6 @@
 from typing import Dict, Any
 from app.models import StructuredState
 
-
 REQUIRED_KEYS = {
     "utterances",
     "symptoms",
@@ -11,7 +10,6 @@ REQUIRED_KEYS = {
     "investigations",
     "tests",
     }
-
 
 def normalize_structured_state(
     previous: StructuredState,
@@ -57,10 +55,12 @@ def merge_utterances_with_speakers(
     for u in updated_utterances:
         idx = u.get("index")
         if idx in prev_by_index:
-            # existing utterance → keep old version
-            merged.append(prev_by_index[idx])
+            old = prev_by_index[idx]
+            merged.append({
+                **old,
+                "speaker": u.get("speaker", old.get("speaker")),
+            })
         else:
-            # new utterance → take Gemini version
             merged.append(u)
 
     return merged

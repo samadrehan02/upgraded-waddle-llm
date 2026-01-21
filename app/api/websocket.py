@@ -34,14 +34,12 @@ EXTRACT_TRIGGERS = (
     "test", "जांच", "karwa", "करवा",
 )
 
-
 def worth_llm_call(utterances: List[Dict[str, Any]]) -> bool:
     for u in utterances:
         text = u.get("text", "").lower()
         if any(trigger in text for trigger in EXTRACT_TRIGGERS):
             return True
     return False
-
 
 @ws_router.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
@@ -261,9 +259,18 @@ async def websocket_endpoint(ws: WebSocket):
 
                 await ws.send_json({
                     "type": "structured",
-                    "data": llm_result,
+                    "structured_state": session_state["structured"],
+                    "clinical_report": (
+                        llm_result.get("data", {}).get("clinical_report")
+                        if isinstance(llm_result, dict)
+                        else None
+                    ),
                     "pdf": f"/data/sessions/{session_date}/{session_id}/clinical_report.pdf",
                     "system_suggestions": system_suggestions,
+                    "meta": {
+                        "model": llm_result.get("model"),
+                        "error": llm_result.get("error"),
+                    }
                 })
 
                 transcript.clear()

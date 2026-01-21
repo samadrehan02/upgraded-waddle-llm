@@ -27,23 +27,17 @@ function updateStatus(status, text) {
     statusText.textContent = text;
 }
 
-function clearEmptyStates() {
-    document.querySelectorAll(".empty-state").forEach(el => el.remove());
-}
-
 async function startRecording() {
     // Reset UI
     transcriptBox.innerHTML = "";
-    structuredBox.textContent = "";
-    llmReportBox.textContent = "";
+    structuredBox.textContent = "Waiting for structured data...";
+    llmReportBox.textContent = "Waiting for clinical report...";
     transcriptCount.textContent = "0 lines";
     lineCount = 0;
     partialElement = null;
 
     copyBtn.style.display = "none";
     if (pdfBtn) pdfBtn.style.display = "none";
-
-    clearEmptyStates();
 
     updateStatus("recording", "Recording…");
     startBtn.disabled = true;
@@ -77,15 +71,14 @@ async function startRecording() {
             updateStatus("ready", "Report ready");
 
             // Structured JSON
-            structuredBox.textContent = JSON.stringify(data.data, null, 2);
+            structuredBox.textContent =
+                data.structured_state
+                    ? JSON.stringify(data.structured_state, null, 2)
+                    : "No structured data received.";
 
-            // Clinical report
-            const report =
-                data.data?.data?.clinical_report ??
-                data.data?.clinical_report ??
-                "❌ No report generated.";
+            llmReportBox.textContent =
+                data.clinical_report || "No report generated.";
 
-            llmReportBox.textContent = report;
             copyBtn.style.display = "flex";
 
             // PDF button
@@ -129,7 +122,7 @@ function stopRecording() {
     stopBtn.disabled = true;
 
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send("stop");
+        ws.send(JSON.stringify({ type: "stop" }));
     }
 
     setTimeout(() => {

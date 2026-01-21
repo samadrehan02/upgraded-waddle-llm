@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 from pathlib import Path
 import chromadb
 from chromadb.config import Settings
+import uuid
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 CHROMA_DIR = BASE_DIR / "data" / "chroma"
@@ -116,7 +117,7 @@ def store_consultation(
         metadata = build_metadata(structured_state)
 
         collection.add(
-            ids=[str(session_id)],
+            ids=[f"{session_id}_{uuid.uuid4().hex}"],
             documents=[document],
             metadatas=[metadata],
         )
