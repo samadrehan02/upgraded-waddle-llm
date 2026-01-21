@@ -14,10 +14,27 @@ async def run_vosk_asr_stream(ws):
     while True:
         msg = await ws.receive()
 
-        if "text" in msg and msg["text"] == "stop":
-            yield {"type": "stop"}
-            break
+        # ---------------------------
+        # FIX: robust STOP handling
+        # ---------------------------
+        if "text" in msg and msg["text"]:
+            raw = msg["text"].strip()
 
+            # Case 1: frontend sends raw "stop"
+            if raw == "stop":
+                yield {"type": "stop"}
+                break
+
+            # Case 2: frontend sends JSON { "type": "stop" }
+            try:
+                payload = json.loads(raw)
+                if payload.get("type") == "stop":
+                    yield {"type": "stop"}
+                    break
+            except json.JSONDecodeError:
+                pass
+
+        # Ignore non-audio messages
         if "bytes" not in msg:
             continue
 
@@ -33,13 +50,13 @@ async def run_vosk_asr_stream(ws):
                     "data": {
                         "speaker": "unknown",
                         "text": text,
-                        "timestamp": datetime.now().isoformat()
-                    }
+                        "timestamp": datetime.now().isoformat(),
+                    },
                 }
         else:
             partial = json.loads(recognizer.PartialResult())
             if partial.get("partial"):
                 yield {
                     "type": "partial",
-                    "text": partial["partial"]
+                    "text": partial["partial"],
                 }
