@@ -6,6 +6,7 @@ import asyncio
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.vectorstore.feedback import store_feedback
 from app.datasets.jsonl_export import export_session
 from app.asr.vosk_adapter import run_vosk_asr_stream
 from app.llm.incremental import update_structured_state
@@ -287,6 +288,7 @@ async def websocket_endpoint(ws: WebSocket):
 
                 await ws.send_json({
                     "type": "structured",
+                    "session_id":state.session_id,
                     "structured_state": structured_copy,
                     "clinical_report": clinical_report,
                     "pdf": f"/data/sessions/{state.session_date}/{state.session_id}/clinical_report.pdf",
@@ -304,3 +306,14 @@ async def websocket_endpoint(ws: WebSocket):
             state.active = False
         silence_task.cancel()
         return
+
+@ws_router.post("/feedback")
+async def feedback_endpoint(payload: Dict[str, str]):
+    session_id = payload.get("session_id")
+    feedback = payload.get("feedback")
+
+    if feedback not in ("like", "dislike") or not session_id:
+        return {"status": "invalid"}
+
+    store_feedback(session_id, feedback)
+    return {"status": "ok"}

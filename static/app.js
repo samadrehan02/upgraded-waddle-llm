@@ -16,6 +16,10 @@ const copyBtn = document.getElementById("copyBtn");
 const pdfBtn = document.getElementById("pdfBtn");
 const suggestionsBox = document.getElementById("suggestions");
 const suggestionsCount = document.getElementById("suggestionsCount");
+const likeBtn = document.getElementById("likeBtn");
+const dislikeBtn = document.getElementById("dislikeBtn");
+
+let activeSessionId = null;
 
 let lineCount = 0;
 let partialElement = null;
@@ -23,6 +27,13 @@ let partialElement = null;
 startBtn.onclick = startRecording;
 stopBtn.onclick = stopRecording;
 copyBtn.onclick = copyToClipboard;
+
+if (likeBtn) {
+    likeBtn.onclick = () => sendFeedback("like");
+}
+if (dislikeBtn) {
+    dislikeBtn.onclick = () => sendFeedback("dislike");
+}
 
 function updateStatus(status, text) {
     statusDot.className = `status-dot ${status}`;
@@ -40,6 +51,16 @@ async function startRecording() {
 
     copyBtn.style.display = "none";
     if (pdfBtn) pdfBtn.style.display = "none";
+    if (likeBtn) {
+        likeBtn.style.display = "none";
+        likeBtn.disabled = false;
+    }
+    if (dislikeBtn) {
+        dislikeBtn.style.display = "none";
+        dislikeBtn.disabled = false;
+    }
+
+    activeSessionId = null;
 
     updateStatus("recording", "Recording…");
     startBtn.disabled = true;
@@ -71,6 +92,12 @@ async function startRecording() {
 
         if (data.type === "structured") {
             updateStatus("ready", "Report ready");
+            activeSessionId = data.session_id || null;
+
+            if (likeBtn && dislikeBtn) {
+                likeBtn.style.display = "flex";
+                dislikeBtn.style.display = "flex";
+            }
 
             // Structured JSON
             structuredBox.textContent =
@@ -147,6 +174,27 @@ function showPartial(text) {
         `<span style="color:#888;font-style:italic;">${text}</span>`;
     transcriptBox.scrollTop = transcriptBox.scrollHeight;
 }
+
+async function sendFeedback(value) {
+    if (!activeSessionId) return;
+
+    if (likeBtn) likeBtn.disabled = true;
+    if (dislikeBtn) dislikeBtn.disabled = true;
+
+    try {
+        await fetch("/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                session_id: activeSessionId,
+                feedback: value,
+            }),
+        });
+    } catch (e) {
+        console.error("Feedback failed", e);
+    }
+}
+
 
 function clearPartial() {
     if (partialElement) {
