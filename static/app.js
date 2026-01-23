@@ -18,6 +18,7 @@ const suggestionsBox = document.getElementById("suggestions");
 const suggestionsCount = document.getElementById("suggestionsCount");
 const likeBtn = document.getElementById("likeBtn");
 const dislikeBtn = document.getElementById("dislikeBtn");
+const regenBtn = document.getElementById("regenBtn");
 
 let activeSessionId = null;
 let currentStructuredState = null;
@@ -28,6 +29,34 @@ let partialElement = null;
 startBtn.onclick = startRecording;
 stopBtn.onclick = stopRecording;
 copyBtn.onclick = copyToClipboard;
+
+if (regenBtn) {
+    regenBtn.onclick = async () => {
+        if (!activeSessionId) return;
+
+        updateStatus("processing", "Regenerating report…");
+
+        try {
+            const res = await fetch(
+                `/sessions/${activeSessionId}/regenerate`,
+                { method: "POST" }
+            );
+
+            const data = await res.json();
+
+            llmReportBox.textContent = data.clinical_report;
+
+            if (pdfBtn && data.pdf) {
+                pdfBtn.onclick = () => window.open(data.pdf, "_blank");
+            }
+
+            updateStatus("ready", "Report updated");
+        } catch (e) {
+            console.error("Regenerate failed", e);
+            updateStatus("", "Regeneration failed");
+        }
+    };
+}
 
 if (likeBtn) likeBtn.onclick = () => sendFeedback("like");
 if (dislikeBtn) dislikeBtn.onclick = () => sendFeedback("dislike");
@@ -82,6 +111,7 @@ async function startRecording() {
             if (dislikeBtn) dislikeBtn.style.display = "flex";
             copyBtn.style.display = "flex";
 
+
             renderStructured(currentStructuredState);
 
             llmReportBox.textContent =
@@ -90,6 +120,10 @@ async function startRecording() {
             if (data.pdf && pdfBtn) {
                 pdfBtn.style.display = "flex";
                 pdfBtn.onclick = () => window.open(data.pdf, "_blank");
+            }
+
+            if (regenBtn){
+                regenBtn.style.display = "flex";
             }
 
             if (data.system_suggestions) {
@@ -259,6 +293,7 @@ function renderSection(title, key) {
     section.appendChild(addBtn);
     structuredBox.appendChild(section);
 }
+
 
 /* ---------------- API ---------------- */
 
