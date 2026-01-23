@@ -20,6 +20,7 @@ const likeBtn = document.getElementById("likeBtn");
 const dislikeBtn = document.getElementById("dislikeBtn");
 
 let activeSessionId = null;
+let currentStructuredState = null;
 
 let lineCount = 0;
 let partialElement = null;
@@ -28,12 +29,8 @@ startBtn.onclick = startRecording;
 stopBtn.onclick = stopRecording;
 copyBtn.onclick = copyToClipboard;
 
-if (likeBtn) {
-    likeBtn.onclick = () => sendFeedback("like");
-}
-if (dislikeBtn) {
-    dislikeBtn.onclick = () => sendFeedback("dislike");
-}
+if (likeBtn) likeBtn.onclick = () => sendFeedback("like");
+if (dislikeBtn) dislikeBtn.onclick = () => sendFeedback("dislike");
 
 function updateStatus(status, text) {
     statusDot.className = `status-dot ${status}`;
@@ -41,26 +38,19 @@ function updateStatus(status, text) {
 }
 
 async function startRecording() {
-    // Reset UI
     transcriptBox.innerHTML = "";
-    structuredBox.textContent = "Waiting for structured data...";
-    llmReportBox.textContent = "Waiting for clinical report...";
+    structuredBox.innerHTML = "Waiting for structured data…";
+    llmReportBox.textContent = "Waiting for clinical report…";
     transcriptCount.textContent = "0 lines";
     lineCount = 0;
     partialElement = null;
+    activeSessionId = null;
+    currentStructuredState = null;
 
     copyBtn.style.display = "none";
     if (pdfBtn) pdfBtn.style.display = "none";
-    if (likeBtn) {
-        likeBtn.style.display = "none";
-        likeBtn.disabled = false;
-    }
-    if (dislikeBtn) {
-        dislikeBtn.style.display = "none";
-        dislikeBtn.disabled = false;
-    }
-
-    activeSessionId = null;
+    if (likeBtn) likeBtn.style.display = "none";
+    if (dislikeBtn) dislikeBtn.style.display = "none";
 
     updateStatus("recording", "Recording…");
     startBtn.disabled = true;
@@ -68,13 +58,6 @@ async function startRecording() {
 
     const wsScheme = location.protocol === "https:" ? "wss" : "ws";
     ws = new WebSocket(`${wsScheme}://${location.host}/ws`);
-
-    ws.onerror = (e) => {
-        console.error("WebSocket error", e);
-        updateStatus("", "Connection error");
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-    };
 
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -86,82 +69,54 @@ async function startRecording() {
 
         if (data.type === "transcript") {
             clearPartial();
-            appendTranscript(data.time, data.text);
+            appendTranscript(data.time, data.text, data.utterance_id);
             return;
         }
 
         if (data.type === "structured") {
             updateStatus("ready", "Report ready");
-            activeSessionId = data.session_id || null;
+            activeSessionId = data.session_id;
+            currentStructuredState = data.structured_state;
 
-            if (likeBtn && dislikeBtn) {
-                likeBtn.style.display = "flex";
-                dislikeBtn.style.display = "flex";
-            }
+            if (likeBtn) likeBtn.style.display = "flex";
+            if (dislikeBtn) dislikeBtn.style.display = "flex";
+            copyBtn.style.display = "flex";
 
-            // Structured JSON
-            structuredBox.textContent =
-                data.structured_state
-                    ? JSON.stringify(data.structured_state, null, 2)
-                    : "No structured data received.";
+            renderStructured(currentStructuredState);
 
             llmReportBox.textContent =
                 data.clinical_report || "No report generated.";
 
-            if (data.system_suggestions){
-                renderSuggestions(data.system_suggestions);
-            }
-
-            copyBtn.style.display = "flex";
-
-            // PDF button
             if (data.pdf && pdfBtn) {
                 pdfBtn.style.display = "flex";
                 pdfBtn.onclick = () => window.open(data.pdf, "_blank");
             }
 
-            return;
+            if (data.system_suggestions) {
+                renderSuggestions(data.system_suggestions);
+            }
         }
     };
 
-    // Audio capture
-    try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioContext = new AudioContext({ sampleRate: 16000 });
+    source = audioContext.createMediaStreamSource(stream);
+    processor = audioContext.createScriptProcessor(4096, 1, 1);
 
-        audioContext = new AudioContext({ sampleRate: 16000 });
-        await audioContext.resume();
+    source.connect(processor);
+    processor.connect(audioContext.destination);
 
-        source = audioContext.createMediaStreamSource(stream);
-        processor = audioContext.createScriptProcessor(4096, 1, 1);
-
-        source.connect(processor);
-        processor.connect(audioContext.destination);
-
-        processor.onaudioprocess = (event) => {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            const input = event.inputBuffer.getChannelData(0);
-            ws.send(floatTo16BitPCM(input));
-        };
-    } catch (err) {
-        console.error("Microphone error", err);
-        updateStatus("", "Microphone access denied");
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-    }
+    processor.onaudioprocess = (e) => {
+        if (ws?.readyState === WebSocket.OPEN) {
+            ws.send(floatTo16BitPCM(e.inputBuffer.getChannelData(0)));
+        }
+    };
 }
 
 function stopRecording() {
-    updateStatus("processing", "Finalizing report…");
+    updateStatus("processing", "Finalizing…");
     stopBtn.disabled = true;
-
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "stop" }));
-    }
-
-    setTimeout(() => {
-        cleanupAudio();
-        startBtn.disabled = false;
-    }, 300);
+    ws?.send(JSON.stringify({ type: "stop" }));
 }
 
 function showPartial(text) {
@@ -170,125 +125,174 @@ function showPartial(text) {
         partialElement.className = "transcript-line partial";
         transcriptBox.appendChild(partialElement);
     }
-    partialElement.innerHTML =
-        `<span style="color:#888;font-style:italic;">${text}</span>`;
-    transcriptBox.scrollTop = transcriptBox.scrollHeight;
+    partialElement.innerHTML = `<i>${text}</i>`;
 }
-
-async function sendFeedback(value) {
-    if (!activeSessionId) return;
-
-    if (likeBtn) likeBtn.disabled = true;
-    if (dislikeBtn) dislikeBtn.disabled = true;
-
-    try {
-        await fetch("/feedback", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                session_id: activeSessionId,
-                feedback: value,
-            }),
-        });
-    } catch (e) {
-        console.error("Feedback failed", e);
-    }
-}
-
 
 function clearPartial() {
-    if (partialElement) {
-        partialElement.remove();
-        partialElement = null;
-    }
+    partialElement?.remove();
+    partialElement = null;
 }
 
-function appendTranscript(time, text) {
+/* ---------------- TRANSCRIPT EDITING ---------------- */
+
+function appendTranscript(time, text, utteranceId) {
     const line = document.createElement("div");
     line.className = "transcript-line";
-    line.textContent = `[${time}] ${text}`;
+    line.dataset.utteranceId = utteranceId;
+
+    line.innerHTML = `
+        <span class="timestamp">[${time}]</span>
+        <span class="content">${text}</span>
+    `;
+
+    line.onclick = () => enableTranscriptEdit(line);
+
     transcriptBox.appendChild(line);
     transcriptBox.scrollTop = transcriptBox.scrollHeight;
 
-    lineCount++;
-    transcriptCount.textContent =
-        `${lineCount} line${lineCount !== 1 ? "s" : ""}`;
+    transcriptCount.textContent = `${++lineCount} lines`;
 }
 
-function renderSuggestions(data) {
-    if (!data || data.based_on_cases === 0) {
-        suggestionsBox.innerHTML =
-            "<div class='empty-state'><p>No suggestions available</p></div>";
-        suggestionsCount.textContent = "0 cases";
-        return;
-    }
+function enableTranscriptEdit(line) {
+    if (!activeSessionId) return;
 
-    suggestionsCount.textContent = `${data.based_on_cases} cases`;
+    const content = line.querySelector(".content");
+    const oldText = content.textContent;
+    const utteranceId = line.dataset.utteranceId;
 
-    let html = "";
+    const input = document.createElement("input");
+    input.value = oldText;
+    content.replaceWith(input);
+    input.focus();
 
-    function renderList(title, items) {
-        if (!items || items.length === 0) return "";
-
-        let list = items
-            .map(i => `• ${i.name} (${i.count})`)
-            .join("<br>");
-
-        return `
-            <div style="margin-bottom:12px;">
-                <strong>${title}</strong><br>
-                ${list}
-            </div>
-        `;
-    }
-
-    html += renderList("Likely Diagnoses", data.diagnosis);
-    html += renderList("Suggested Tests", data.tests);
-    html += renderList("Common Medications", data.medications);
-
-    suggestionsBox.innerHTML = html || "<p>No ranked suggestions.</p>";
+    input.onkeydown = async (e) => {
+        if (e.key === "Enter") {
+            const newText = input.value.trim();
+            if (newText !== oldText) {
+                await submitTranscriptEdit({
+                    sessionId: activeSessionId,
+                    utteranceId,
+                    field: "text",
+                    oldValue: oldText,
+                    newValue: newText,
+                });
+            }
+            content.textContent = newText || oldText;
+            input.replaceWith(content);
+        }
+        if (e.key === "Escape") input.replaceWith(content);
+    };
 }
 
-function floatTo16BitPCM(float32Array) {
-    const buffer = new ArrayBuffer(float32Array.length * 2);
-    const view = new DataView(buffer);
-    let offset = 0;
+/* ---------------- STRUCTURED EDITING ---------------- */
 
-    for (let i = 0; i < float32Array.length; i++, offset += 2) {
-        let sample = Math.max(-1, Math.min(1, float32Array[i]));
-        view.setInt16(offset, sample * 0x7fff, true);
-    }
-    return buffer;
+function renderStructured(state) {
+    structuredBox.innerHTML = "";
+    renderSection("Diagnosis", "diagnosis");
+    renderSection("Tests Advised", "tests");
+    renderSection("Medications", "medications");
+    renderSection("Advice", "advice");
+}
+
+function renderSection(title, key) {
+    const section = document.createElement("div");
+    section.className = "structured-section";
+
+    const header = document.createElement("div");
+    header.className = "structured-header";
+    header.textContent = title;
+
+    const list = document.createElement("div");
+    list.className = "structured-list";
+
+
+    (currentStructuredState[key] || []).forEach(item => {
+        const row = document.createElement("div");
+        row.className = "structured-item";
+
+        const label = document.createElement("span");
+        label.textContent = typeof item === "string" ? item : item.name;
+
+        const del = document.createElement("button");
+        del.className = "structured-remove";
+        del.innerHTML = "×";
+
+        del.onclick = async () => {
+            await submitStructuredEdit({
+                sessionId: activeSessionId,
+                section: key,
+                action: "remove",
+                value: item,
+            });
+            currentStructuredState[key] =
+                currentStructuredState[key].filter(v => v !== item);
+            renderStructured(currentStructuredState);
+        };
+
+        row.appendChild(label);
+        row.appendChild(del);
+        list.appendChild(row);
+    });
+
+    const addBtn = document.createElement("button");
+    addBtn.className = "structured-add";
+    addBtn.textContent = `+ Add ${title}`;
+
+    addBtn.onclick = async () => {
+        const value = prompt(`Enter ${title}`);
+        if (!value) return;
+
+        const payload = key === "medications" ? { name: value } : value;
+
+        await submitStructuredEdit({
+            sessionId: activeSessionId,
+            section: key,
+            action: "add",
+            value: payload,
+        });
+
+        currentStructuredState[key].push(payload);
+        renderStructured(currentStructuredState);
+    };
+    section.appendChild(header);
+    section.appendChild(ul);
+    section.appendChild(addBtn);
+    structuredBox.appendChild(section);
+}
+
+/* ---------------- API ---------------- */
+
+async function submitTranscriptEdit(payload) {
+    await fetch(`/sessions/${payload.sessionId}/transcript-edits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, edit_id: crypto.randomUUID() }),
+    });
+}
+
+async function submitStructuredEdit(payload) {
+    await fetch(`/sessions/${payload.sessionId}/structured-edits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, edit_id: crypto.randomUUID() }),
+    });
+}
+
+/* ---------------- MISC ---------------- */
+
+function floatTo16BitPCM(input) {
+    const buf = new ArrayBuffer(input.length * 2);
+    const view = new DataView(buf);
+    input.forEach((s, i) => view.setInt16(i * 2, s * 0x7fff, true));
+    return buf;
 }
 
 function cleanupAudio() {
-    if (processor) {
-        processor.disconnect();
-        processor = null;
-    }
-    if (source) {
-        source.disconnect();
-        source = null;
-    }
-    if (audioContext) {
-        audioContext.close();
-        audioContext = null;
-    }
-    if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-        stream = null;
-    }
+    processor?.disconnect();
+    source?.disconnect();
+    stream?.getTracks().forEach(t => t.stop());
 }
 
 function copyToClipboard() {
-    const text = llmReportBox.textContent;
-    if (!text) return;
-
-    navigator.clipboard.writeText(text).then(() => {
-        const icon = copyBtn.querySelector(".material-icons");
-        icon.textContent = "check";
-        setTimeout(() => {
-            icon.textContent = "content_copy";
-        }, 1500);
-    });
+    navigator.clipboard.writeText(llmReportBox.textContent);
 }

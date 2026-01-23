@@ -161,6 +161,76 @@ header {
     white-space: nowrap;
     line-height: 1;
 }
+/* Structured Data Container */
+#structured {
+    display: grid;
+    gap: 16px;
+}
+
+/* Section card */
+.structured-section {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 14px 16px;
+}
+
+/* Section title */
+.structured-header {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 10px;
+}
+
+/* Items list */
+.structured-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+/* Item row */
+.structured-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: #111827;
+}
+
+/* Remove button */
+.structured-remove {
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.structured-remove:hover {
+    color: #ef4444;
+}
+
+/* Add button */
+.structured-add {
+    align-self: flex-start;
+    background: #f3f4f6;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.structured-add:hover {
+    background: #e5e7eb;
+}
 
 /* ========================================
    BUTTONS - FIXED ALIGNMENT
