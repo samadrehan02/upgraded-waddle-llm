@@ -130,6 +130,31 @@ async function startRecording() {
                 renderSuggestions(data.system_suggestions);
             }
         }
+        // Auto-fetch final report once backend finishes
+        setTimeout(async () => {
+            if (!activeSessionId) return;
+
+            try {
+                const res = await fetch(
+                    `/sessions/${activeSessionId}/regenerate`,
+                    { method: "POST" }
+                );
+                const result = await res.json();
+
+                llmReportBox.textContent =
+                    result.clinical_report || "No report generated.";
+
+                if (pdfBtn && result.pdf) {
+                    pdfBtn.style.display = "flex";
+                    pdfBtn.onclick = () => window.open(result.pdf, "_blank");
+                }
+
+                updateStatus("ready", "Report ready");
+            } catch (e) {
+                console.error("Auto-regenerate failed", e);
+            }
+        }, 1500);
+
     };
 
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -289,7 +314,7 @@ function renderSection(title, key) {
         renderStructured(currentStructuredState);
     };
     section.appendChild(header);
-    section.appendChild(ul);
+    section.appendChild(list);
     section.appendChild(addBtn);
     structuredBox.appendChild(section);
 }

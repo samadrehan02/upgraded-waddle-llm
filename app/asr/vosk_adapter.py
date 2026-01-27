@@ -14,18 +14,13 @@ async def run_vosk_asr_stream(ws):
     while True:
         msg = await ws.receive()
 
-        # ---------------------------
-        # FIX: robust STOP handling
-        # ---------------------------
         if "text" in msg and msg["text"]:
             raw = msg["text"].strip()
 
-            # Case 1: frontend sends raw "stop"
             if raw == "stop":
                 yield {"type": "stop"}
                 break
 
-            # Case 2: frontend sends JSON { "type": "stop" }
             try:
                 payload = json.loads(raw)
                 if payload.get("type") == "stop":
@@ -34,7 +29,6 @@ async def run_vosk_asr_stream(ws):
             except json.JSONDecodeError:
                 pass
 
-        # Ignore non-audio messages
         if "bytes" not in msg:
             continue
 

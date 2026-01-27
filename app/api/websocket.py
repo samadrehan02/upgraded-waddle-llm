@@ -21,7 +21,7 @@ from app.storage.session_store import (
     store_metadata,
     store_pdf_report,
 )
-from app.storage.session_registry import register_session, remove_session
+from app.storage.session_registry import register_session
 from app.core.session_models import (
     SessionState,
     FinalUtterance,
@@ -30,17 +30,9 @@ from app.core.session_models import (
     LLMDraft,
 )
 
-# --------------------
-# CONFIG
-# --------------------
-
 SILENCE_THRESHOLD_SECONDS = 12
 MIN_UPDATE_INTERVAL = 20
 MIN_UTTERANCES_PER_UPDATE = 3
-
-# --------------------
-# LOCAL MODELS
-# --------------------
 
 @dataclass(frozen=True)
 class RawUtterance:
@@ -48,21 +40,12 @@ class RawUtterance:
     timestamp: str
     text: str
 
-
-@dataclass
-class ASRUtterance:
-    utterance_id: str
-    text: str
-    confidence: float
-
-
 def _new_raw_utterance(text: str) -> RawUtterance:
     return RawUtterance(
         utterance_id=str(uuid.uuid4()),
         timestamp=datetime.utcnow().isoformat(),
         text=text,
     )
-
 
 def _base_structured_state() -> Dict[str, Any]:
     return {
@@ -76,9 +59,13 @@ def _base_structured_state() -> Dict[str, Any]:
         "tests": [],
     }
 
-# --------------------
-# EDIT APPLICATION
-# --------------------
+def ws_safe_structured_state(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Strip large fields before sending over WebSocket.
+    """
+    out = dict(state)
+    out.pop("utterances", None)
+    return out
 
 def apply_transcript_edits(
     transcript: List[FinalUtterance],
@@ -109,7 +96,6 @@ def apply_transcript_edits(
 
     return [edited[u.utterance_id] for u in transcript]
 
-
 def apply_structured_edits(
     state: Dict[str, Any],
     edits: List[StructuredEdit],
@@ -134,9 +120,6 @@ def apply_structured_edits(
 
     return out
 
-# --------------------
-# ROUTER
-# --------------------
 
 ws_router = APIRouter()
 
@@ -157,10 +140,6 @@ async def websocket_endpoint(ws: WebSocket):
 
     last_llm_update_time = 0.0
     llm_lock = asyncio.Lock()
-
-    # --------------------
-    # INCREMENTAL LLM UPDATE (CORRECT)
-    # --------------------
 
     async def run_incremental_update(
         new_utts: List[FinalUtterance],
@@ -215,10 +194,6 @@ async def websocket_endpoint(ws: WebSocket):
                 state.last_processed_index = len(state.final_transcript)
                 last_llm_update_time = time.time()
 
-    # --------------------
-    # SILENCE WATCHER
-    # --------------------
-
     async def silence_watcher():
         while True:
             await asyncio.sleep(1)
@@ -233,15 +208,11 @@ async def websocket_endpoint(ws: WebSocket):
                 if state.last_processed_index >= len(state.final_transcript):
                     continue
 
-                pending = state.final_transcript[state.last_processed_index :]
+                pending = state.final_transcript[state.last_processed_index:]
 
             await run_incremental_update(pending)
 
     silence_task = asyncio.create_task(silence_watcher())
-
-    # --------------------
-    # MAIN LOOP
-    # --------------------
 
     try:
         async for event in run_vosk_asr_stream(ws):
@@ -263,9 +234,6 @@ async def websocket_endpoint(ws: WebSocket):
 
                 async with state.lock:
                     state.raw_transcript.append(raw)
-                    state.asr_utterances.append(
-                        ASRUtterance(raw.utterance_id, text, 1.0)
-                    )
                     state.final_transcript.append(final)
                     state.last_text_time = time.monotonic()
 
@@ -278,8 +246,6 @@ async def websocket_endpoint(ws: WebSocket):
                 })
                 continue
 
-            # ---------------- STOP ----------------
-
             if event["type"] == "stop":
                 async with state.lock:
                     state.active = False
@@ -287,7 +253,7 @@ async def websocket_endpoint(ws: WebSocket):
                 silence_task.cancel()
 
                 async with state.lock:
-                    remaining = state.final_transcript[state.last_processed_index :]
+                    remaining = state.final_transcript[state.last_processed_index:]
 
                 if remaining:
                     await run_incremental_update(remaining, force=True)
@@ -316,80 +282,78 @@ async def websocket_endpoint(ws: WebSocket):
                     state.final_transcript = transcript
                     state.final_structured_state = structured
 
-                loop = asyncio.get_running_loop()
-
-                llm_result = await loop.run_in_executor(
-                    None,
-                    generate_report_from_state,
-                    state.final_structured_state,
-                )
-
-                clinical_report = llm_result.get("data", {}).get("clinical_report", "")
-
-                store_pdf_report(
-                    state.session_id,
-                    session_date,
-                    state.final_structured_state,
-                    clinical_report,
-                )
-
-                store_raw_transcript(
-                    state.session_id,
-                    [u.__dict__ for u in state.raw_transcript],
-                )
-
-                store_raw_transcript(
-                    f"{state.session_id}_corrected",
-                    [u.__dict__ for u in state.final_transcript],
-                )
-
-                store_structured_state(
-                    state.session_id,
-                    state.final_structured_state,
-                )
-
-                store_structured_output(state.session_id, llm_result)
-
-                store_metadata(
-                    state.session_id,
-                    {
-                        "session_id": state.session_id,
-                        "timestamp": datetime.utcnow().isoformat(),
-                        "model": llm_result.get("model"),
-                        "patient": state.final_structured_state.get("patient"),
-                    },
-                )
-
-                store_consultation(
-                    session_id=state.session_id,
-                    structured_state=state.final_structured_state,
-                )
-
-                export_session(
-                    session_id=state.session_id,
-                    structured_state=state.final_structured_state,
-                )
-
-                suggestions = await loop.run_in_executor(
-                    None,
-                    generate_system_suggestions,
-                    state.final_structured_state,
-                )
-
+                # 1️⃣ SEND STRUCTURED SNAPSHOT (FAST, SMALL)
                 await ws.send_json({
                     "type": "structured",
                     "session_id": state.session_id,
-                    "structured_state": state.final_structured_state,
-                    "clinical_report": clinical_report,
-                    "pdf": f"/data/sessions/{session_date}/{state.session_id}/clinical_report.pdf",
-                    "system_suggestions": suggestions,
+                    "structured_state": ws_safe_structured_state(
+                        state.final_structured_state
+                    ),
                 })
 
-                remove_session(state.session_id)
+                # 2️⃣ FINALIZE IN BACKGROUND (NO WS)
+                async def finalize_backend():
+                    loop = asyncio.get_running_loop()
+
+                    llm_result = await loop.run_in_executor(
+                        None,
+                        generate_report_from_state,
+                        state.final_structured_state,
+                    )
+
+                    clinical_report = llm_result.get("data", {}).get(
+                        "clinical_report", ""
+                    )
+
+                    store_pdf_report(
+                        state.session_id,
+                        session_date,
+                        state.final_structured_state,
+                        clinical_report,
+                    )
+
+                    store_raw_transcript(
+                        state.session_id,
+                        [u.__dict__ for u in state.raw_transcript],
+                    )
+
+                    store_raw_transcript(
+                        f"{state.session_id}_corrected",
+                        [u.__dict__ for u in state.final_transcript],
+                    )
+
+                    store_structured_state(
+                        state.session_id,
+                        state.final_structured_state,
+                    )
+
+                    store_structured_output(state.session_id, llm_result)
+
+                    store_metadata(
+                        state.session_id,
+                        {
+                            "session_id": state.session_id,
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "model": llm_result.get("model"),
+                            "patient": state.final_structured_state.get("patient"),
+                        },
+                    )
+
+                    store_consultation(
+                        session_id=state.session_id,
+                        structured_state=state.final_structured_state,
+                    )
+
+                    export_session(
+                        session_id=state.session_id,
+                        structured_state=state.final_structured_state,
+                    )
+
+                asyncio.create_task(finalize_backend())
+
                 break
 
     except WebSocketDisconnect:
         async with state.lock:
             state.active = False
         silence_task.cancel()
-        remove_session(state.session_id)

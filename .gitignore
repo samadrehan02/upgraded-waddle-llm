@@ -23,3 +23,8 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+gen.py
+
+test_consultation.wav
+test_consultation1.wav

@@ -9,11 +9,6 @@ from app.core.session_models import (
 
 router = APIRouter(prefix="/sessions", tags=["edits"])
 
-
-# ----------------------------
-# Transcript edits
-# ----------------------------
-
 @router.post("/{session_id}/transcript-edits")
 async def add_transcript_edit(
     session_id: str,
@@ -38,11 +33,6 @@ async def add_transcript_edit(
         )
 
     return {"status": "ok"}
-
-
-# ----------------------------
-# Structured edits
-# ----------------------------
 
 @router.post("/{session_id}/structured-edits")
 async def add_structured_edit(
