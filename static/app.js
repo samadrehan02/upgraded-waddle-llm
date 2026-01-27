@@ -31,55 +31,30 @@ stopBtn.onclick = stopRecording;
 copyBtn.onclick = copyToClipboard;
 
 if (regenBtn) {
-    regenBtn.onclick = async () => {
-        if (!activeSessionId) return;
-
-        updateStatus("processing", "Regenerating report…");
-
-        try {
-            const res = await fetch(
-                `/sessions/${activeSessionId}/regenerate`,
-                { method: "POST" }
-            );
-
-            const data = await res.json();
-
-            llmReportBox.textContent = data.clinical_report;
-
-            if (pdfBtn && data.pdf) {
-                pdfBtn.onclick = () => window.open(data.pdf, "_blank");
-            }
-
-            updateStatus("ready", "Report updated");
-        } catch (e) {
-            console.error("Regenerate failed", e);
-            updateStatus("", "Regeneration failed");
-        }
-    };
+    regenBtn.onclick = regenerateReport;
 }
-
-if (likeBtn) likeBtn.onclick = () => sendFeedback("like");
-if (dislikeBtn) dislikeBtn.onclick = () => sendFeedback("dislike");
 
 function updateStatus(status, text) {
     statusDot.className = `status-dot ${status}`;
     statusText.textContent = text;
 }
 
+/* ================== RECORDING ================== */
+
 async function startRecording() {
     transcriptBox.innerHTML = "";
     structuredBox.innerHTML = "Waiting for structured data…";
     llmReportBox.textContent = "Waiting for clinical report…";
     transcriptCount.textContent = "0 lines";
+
     lineCount = 0;
     partialElement = null;
     activeSessionId = null;
     currentStructuredState = null;
 
     copyBtn.style.display = "none";
-    if (pdfBtn) pdfBtn.style.display = "none";
-    if (likeBtn) likeBtn.style.display = "none";
-    if (dislikeBtn) dislikeBtn.style.display = "none";
+    pdfBtn && (pdfBtn.style.display = "none");
+    regenBtn && (regenBtn.style.display = "none");
 
     updateStatus("recording", "Recording…");
     startBtn.disabled = true;
@@ -88,74 +63,7 @@ async function startRecording() {
     const wsScheme = location.protocol === "https:" ? "wss" : "ws";
     ws = new WebSocket(`${wsScheme}://${location.host}/ws`);
 
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "partial") {
-            showPartial(data.text);
-            return;
-        }
-
-        if (data.type === "transcript") {
-            clearPartial();
-            appendTranscript(data.time, data.text, data.utterance_id);
-            return;
-        }
-
-        if (data.type === "structured") {
-            updateStatus("ready", "Report ready");
-            activeSessionId = data.session_id;
-            currentStructuredState = data.structured_state;
-
-            if (likeBtn) likeBtn.style.display = "flex";
-            if (dislikeBtn) dislikeBtn.style.display = "flex";
-            copyBtn.style.display = "flex";
-
-
-            renderStructured(currentStructuredState);
-
-            llmReportBox.textContent =
-                data.clinical_report || "No report generated.";
-
-            if (data.pdf && pdfBtn) {
-                pdfBtn.style.display = "flex";
-                pdfBtn.onclick = () => window.open(data.pdf, "_blank");
-            }
-
-            if (regenBtn){
-                regenBtn.style.display = "flex";
-            }
-
-            if (data.system_suggestions) {
-                renderSuggestions(data.system_suggestions);
-            }
-        }
-        // Auto-fetch final report once backend finishes
-        setTimeout(async () => {
-            if (!activeSessionId) return;
-
-            try {
-                const res = await fetch(
-                    `/sessions/${activeSessionId}/regenerate`,
-                    { method: "POST" }
-                );
-                const result = await res.json();
-
-                llmReportBox.textContent =
-                    result.clinical_report || "No report generated.";
-
-                if (pdfBtn && result.pdf) {
-                    pdfBtn.style.display = "flex";
-                    pdfBtn.onclick = () => window.open(result.pdf, "_blank");
-                }
-
-                updateStatus("ready", "Report ready");
-            } catch (e) {
-                console.error("Auto-regenerate failed", e);
-            }
-        }, 1500);
-
-    };
+    ws.onmessage = handleWsMessage;
 
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioContext = new AudioContext({ sampleRate: 16000 });
@@ -176,6 +84,54 @@ function stopRecording() {
     updateStatus("processing", "Finalizing…");
     stopBtn.disabled = true;
     ws?.send(JSON.stringify({ type: "stop" }));
+    cleanupAudio();
+}
+
+/* ================== WS HANDLING ================== */
+
+function handleWsMessage(event) {
+    const data = JSON.parse(event.data);
+
+    if (data.type === "partial") {
+        showPartial(data.text);
+        return;
+    }
+
+    if (data.type === "transcript") {
+        clearPartial();
+        appendTranscript(data.time, data.text, data.utterance_id);
+        return;
+    }
+
+    if (data.type === "structured") {
+        activeSessionId = data.session_id;
+        currentStructuredState = data.structured_state;
+
+        updateStatus("ready", "Structured data ready");
+        renderStructured(currentStructuredState);
+
+        copyBtn.style.display = "flex";
+        regenBtn && (regenBtn.style.display = "flex");
+
+        autoRegenerateOnce();
+    }
+}
+
+/* ================== TRANSCRIPT ================== */
+
+function appendTranscript(time, text, utteranceId) {
+    const line = document.createElement("div");
+    line.className = "transcript-line";
+    line.dataset.utteranceId = utteranceId;
+
+    line.innerHTML = `
+        <span class="timestamp">[${time}]</span>
+        <span class="content">${text}</span>
+    `;
+
+    transcriptBox.appendChild(line);
+    transcriptBox.scrollTop = transcriptBox.scrollHeight;
+    transcriptCount.textContent = `${++lineCount} lines`;
 }
 
 function showPartial(text) {
@@ -192,58 +148,7 @@ function clearPartial() {
     partialElement = null;
 }
 
-/* ---------------- TRANSCRIPT EDITING ---------------- */
-
-function appendTranscript(time, text, utteranceId) {
-    const line = document.createElement("div");
-    line.className = "transcript-line";
-    line.dataset.utteranceId = utteranceId;
-
-    line.innerHTML = `
-        <span class="timestamp">[${time}]</span>
-        <span class="content">${text}</span>
-    `;
-
-    line.onclick = () => enableTranscriptEdit(line);
-
-    transcriptBox.appendChild(line);
-    transcriptBox.scrollTop = transcriptBox.scrollHeight;
-
-    transcriptCount.textContent = `${++lineCount} lines`;
-}
-
-function enableTranscriptEdit(line) {
-    if (!activeSessionId) return;
-
-    const content = line.querySelector(".content");
-    const oldText = content.textContent;
-    const utteranceId = line.dataset.utteranceId;
-
-    const input = document.createElement("input");
-    input.value = oldText;
-    content.replaceWith(input);
-    input.focus();
-
-    input.onkeydown = async (e) => {
-        if (e.key === "Enter") {
-            const newText = input.value.trim();
-            if (newText !== oldText) {
-                await submitTranscriptEdit({
-                    sessionId: activeSessionId,
-                    utteranceId,
-                    field: "text",
-                    oldValue: oldText,
-                    newValue: newText,
-                });
-            }
-            content.textContent = newText || oldText;
-            input.replaceWith(content);
-        }
-        if (e.key === "Escape") input.replaceWith(content);
-    };
-}
-
-/* ---------------- STRUCTURED EDITING ---------------- */
+/* ================== STRUCTURED ================== */
 
 function renderStructured(state) {
     structuredBox.innerHTML = "";
@@ -264,28 +169,37 @@ function renderSection(title, key) {
     const list = document.createElement("div");
     list.className = "structured-list";
 
-
     (currentStructuredState[key] || []).forEach(item => {
         const row = document.createElement("div");
         row.className = "structured-item";
 
         const label = document.createElement("span");
-        label.textContent = typeof item === "string" ? item : item.name;
+        label.textContent =
+            typeof item === "string"
+                ? item
+                : item.value ?? item.name ?? "";
 
         const del = document.createElement("button");
         del.className = "structured-remove";
-        del.innerHTML = "×";
+        del.textContent = "×";
 
         del.onclick = async () => {
-            await submitStructuredEdit({
-                sessionId: activeSessionId,
-                section: key,
-                action: "remove",
-                value: item,
-            });
-            currentStructuredState[key] =
-                currentStructuredState[key].filter(v => v !== item);
-            renderStructured(currentStructuredState);
+            try {
+                await submitStructuredEdit({
+                    sessionId: activeSessionId,
+                    section: key,
+                    action: "remove",
+                    value: item,
+                });
+
+                currentStructuredState[key] =
+                    currentStructuredState[key].filter(v => v !== item);
+
+                renderStructured(currentStructuredState);
+            } catch (e) {
+                alert("Failed to save edit");
+                console.error(e);
+            }
         };
 
         row.appendChild(label);
@@ -298,47 +212,88 @@ function renderSection(title, key) {
     addBtn.textContent = `+ Add ${title}`;
 
     addBtn.onclick = async () => {
-        const value = prompt(`Enter ${title}`);
-        if (!value) return;
+        const input = prompt(`Enter ${title}`);
+        if (!input) return;
 
-        const payload = key === "medications" ? { name: value } : value;
+        const payload =
+            key === "medications"
+                ? { name: input }
+                : { value: input };
 
-        await submitStructuredEdit({
-            sessionId: activeSessionId,
-            section: key,
-            action: "add",
-            value: payload,
-        });
+        try {
+            await submitStructuredEdit({
+                sessionId: activeSessionId,
+                section: key,
+                action: "add",
+                value: payload,
+            });
 
-        currentStructuredState[key].push(payload);
-        renderStructured(currentStructuredState);
+            currentStructuredState[key].push(payload);
+            renderStructured(currentStructuredState);
+        } catch (e) {
+            alert("Failed to save edit");
+            console.error(e);
+        }
     };
+
     section.appendChild(header);
     section.appendChild(list);
     section.appendChild(addBtn);
     structuredBox.appendChild(section);
 }
 
-
-/* ---------------- API ---------------- */
-
-async function submitTranscriptEdit(payload) {
-    await fetch(`/sessions/${payload.sessionId}/transcript-edits`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, edit_id: crypto.randomUUID() }),
-    });
-}
+/* ================== BACKEND ================== */
 
 async function submitStructuredEdit(payload) {
-    await fetch(`/sessions/${payload.sessionId}/structured-edits`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, edit_id: crypto.randomUUID() }),
-    });
+    const res = await fetch(
+        `/sessions/${payload.sessionId}/structured-edits`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ...payload,
+                edit_id: crypto.randomUUID(),
+                edited_by: "ui",
+                edited_at: new Date().toISOString(),
+            }),
+        }
+    );
+
+    if (!res.ok) {
+        throw new Error(await res.text());
+    }
 }
 
-/* ---------------- MISC ---------------- */
+async function regenerateReport() {
+    if (!activeSessionId) return;
+
+    updateStatus("processing", "Regenerating…");
+
+    const res = await fetch(
+        `/sessions/${activeSessionId}/regenerate`,
+        { method: "POST" }
+    );
+
+    const data = await res.json();
+
+    llmReportBox.textContent = data.clinical_report || "";
+
+    if (pdfBtn && data.pdf) {
+        pdfBtn.style.display = "flex";
+        pdfBtn.onclick = () => window.open(data.pdf, "_blank");
+    }
+
+    updateStatus("ready", "Report updated");
+}
+
+let autoRegenDone = false;
+function autoRegenerateOnce() {
+    if (autoRegenDone) return;
+    autoRegenDone = true;
+    setTimeout(regenerateReport, 1200);
+}
+
+/* ================== UTILS ================== */
 
 function floatTo16BitPCM(input) {
     const buf = new ArrayBuffer(input.length * 2);

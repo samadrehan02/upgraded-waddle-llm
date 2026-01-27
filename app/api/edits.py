@@ -6,6 +6,7 @@ from app.core.session_models import (
     TranscriptEdit,
     StructuredEdit,
 )
+from app.api.websocket import apply_structured_edits
 
 router = APIRouter(prefix="/sessions", tags=["edits"])
 
@@ -20,16 +21,20 @@ async def add_transcript_edit(
         raise HTTPException(status_code=404, detail="Session not found")
 
     async with session.lock:
-        session.transcript_edits.append(
-            TranscriptEdit(
-                edit_id=edit.edit_id,
-                utterance_id=edit.utterance_id,
-                field=edit.field,
-                old_value=edit.old_value,
-                new_value=edit.new_value,
-                edited_by=edit.edited_by,
-                edited_at=edit.edited_at or datetime.utcnow().isoformat(),
-            )
+        applied = StructuredEdit(
+            edit_id=edit.edit_id,
+            section=edit.section,
+            action=edit.action,
+            value=edit.value,
+            edited_by=edit.edited_by,
+            edited_at=edit.edited_at or datetime.utcnow().isoformat(),
+        )
+
+        session.structured_edits.append(applied)
+
+        session.final_structured_state = apply_structured_edits(
+            session.final_structured_state,
+            [applied],
         )
 
     return {"status": "ok"}
