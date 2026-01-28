@@ -24,15 +24,15 @@ It is a **documentation assistant** designed to reduce manual note-taking and su
 
 ```mermaid
 graph TD
-    Mic[Browser Microphone] -->|WebSocket Stream| Server[FastAPI Server]
-    Server -->|PCM Audio| Vosk[Vosk ASR (Hindi)]
-    Vosk -->|Raw Text| Incremental[Incremental LLM (Gemini)]
-    Incremental -->|JSON Updates| UI[Frontend Dashboard]
+    Mic["Browser Microphone"] -->|WebSocket Stream| Server["FastAPI Server"]
+    Server -->|PCM Audio| Vosk["Vosk ASR (Hindi)"]
+    Vosk -->|Raw Text| Incremental["Incremental LLM (Gemini)"]
+    Incremental -->|JSON Updates| UI["Frontend Dashboard"]
     
     subgraph "Post-Consultation"
-        Incremental -->|Final State| Vector[Vector Store (ChromaDB)]
-        Vector -->|Similarity Search| Suggestions[Case Suggestions]
-        Incremental -->|Structured Data| PDF[PDF Generator]
+        Incremental -->|Final State| Vector["Vector Store (ChromaDB)"]
+        Vector -->|Similarity Search| Suggestions["Case Suggestions"]
+        Incremental -->|Structured Data| PDF["PDF Generator"]
     end
 
 ```
@@ -196,7 +196,3 @@ Access the dashboard at **`http://localhost:8000`**.
 ## Status
 
 This project is a functional proof-of-concept. It demonstrates a complete pipeline from audio ingestion to vector-backed clinical insights, suitable for further hardening and integration into hospital workflows.
-
-```
-
-```
