@@ -7,19 +7,19 @@ import uuid
 from copy import deepcopy
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-
+from app.vectorstore.suggestions import generate_system_suggestions
 from app.asr.vosk_adapter import run_vosk_asr_stream
 from app.llm.incremental import update_structured_state
 from app.llm.gemini import generate_report_from_state
 from app.datasets.jsonl_export import export_session
 from app.vectorstore.chroma_store import store_consultation
-from app.vectorstore.suggestions import generate_system_suggestions
 from app.storage.session_store import (
     store_raw_transcript,
     store_structured_state,
     store_structured_output,
     store_metadata,
     store_pdf_report,
+    store_suggestions,
 )
 from app.storage.session_registry import register_session
 from app.core.session_models import (
@@ -343,6 +343,16 @@ async def websocket_endpoint(ws: WebSocket):
                         session_id=state.session_id,
                         structured_state=state.final_structured_state,
                     )
+                    try:
+                        suggestions = generate_system_suggestions(
+                            structured_state=state.final_structured_state
+                        )
+                        store_suggestions(
+                            session_id=state.session_id,
+                            suggestions=suggestions
+                        )
+                    except Exception as e:
+                        print(f"Error generating suggestions: {e}")
 
                     export_session(
                         session_id=state.session_id,

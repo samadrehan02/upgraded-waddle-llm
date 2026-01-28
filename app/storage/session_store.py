@@ -203,3 +203,7 @@ def store_structured_state(session_id: str, structured_state: dict):
     path = _session_dir(session_id) / "structured_state.json"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(structured_state, f, ensure_ascii=False, indent=2)
+        
+def store_suggestions(session_id: str, suggestions: Dict[str, Any]) -> None:
+    path = _session_dir(session_id) / "suggestions.json"
+    path.write_text(json.dumps(suggestions, ensure_ascii=False, indent=2), encoding="utf-8")
