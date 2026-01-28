@@ -48,7 +48,7 @@ async def add_structured_edit(
         session = get_session(session_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found")
-
+# half these fucking things dont render but the system dosent work without all of them, i shouldve never taken this job.
     async with session.lock:
         session.structured_edits.append(
             StructuredEdit(
