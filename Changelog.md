@@ -236,3 +236,38 @@
 - Doctors remain the final decision-makers
 
 ---
+
+## 2026-01-28
+
+### 🚀 Major UI/UX Overhaul
+- **Modern "Glassmorphism" Design:** - Complete CSS rewrite using modern color variables, gradients, and soft shadows.
+  - Implemented semi-transparent panels with backdrop blurs.
+  - Standardized typography using `Inter` font family for better readability.
+- **Visual Feedback:**
+  - Added pulsating recording indicators (Red/Yellow/Green status dots).
+  - Improved empty states with centered icons and clear instructional text.
+  - Added smooth transition animations for transcript lines and buttons.
+- **Layout Fixes:**
+  - **Centered Headers:** Panel titles (e.g., "Structured Data") are now perfectly centered while keeping action buttons pinned to the right.
+  - **Adaptive Buttons:** "Regenerate PDF" and other action buttons now expand to fit their text content instead of being crushed.
+  - **Responsive Grid:** Improved mobile and tablet responsiveness for the control panel and data grids.
+
+### ✨ New Features
+- **System Suggestions (Similar Cases):**
+  - **Vector Database Integration:** Wired up `ChromaDB` to index and query past consultation sessions.
+  - **UI Panel:** Added a dedicated "System Suggestions" panel that displays common Diagnoses, Tests, and Medications from similar historical cases.
+  - **Automatic Trigger:** Suggestions are fetched and displayed automatically when the session finalizes.
+- **Hindi PDF Support:**
+  - **Custom Font Registration:** Integrated `NotoSansDevanagari` to support Hindi characters in PDF reports.
+  - **Font Fallbacks:** Solved "tofu" (box character) rendering issues for non-Latin scripts.
+
+### ⚡ Performance & Latency
+- **ASR Offloading:** Moved blocking Vosk `AcceptWaveform` calls to a thread pool to prevent event loop blocking.
+- **Throttled Updates:** Optimized WebSocket message handling to ensure the UI remains responsive (60fps) even during heavy dictation.
+- **Reduced Jitter:** Smoothed out partial transcript updates for a more stable reading experience.
+
+### 🧹 Code Cleanup & Maintenance
+- **Dead Code Removal:** - Deleted unused `app/vectorstore/feedback.py` (legacy feedback module).
+  - Deleted `app/pipeline/normalize.py` (replaced by streaming architecture).
+  - Removed unused imports and legacy batch-processing logic.
+- **File Organization:** Standardized static asset paths (`fonts/`, `css/`, `js/`).
