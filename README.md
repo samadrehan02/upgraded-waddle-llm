@@ -1,21 +1,20 @@
+
 # Hindi Medical Transcription & Clinical Note Assistant
 
-A **real-time Hindi medical transcription system** that converts live doctor–patient conversations into structured clinical data and a draft OPD note.
+A **real-time Hindi medical transcription system** that converts live doctor–patient conversations into structured clinical data, provides similar case suggestions, and generates a formatted PDF OPD note.
 
-This system is **not a diagnostic tool** and **does not provide medical advice**.  
-It is a **documentation assistant** designed to reduce manual note-taking.
+This system is **not a diagnostic tool** and **does not provide medical advice**.
+It is a **documentation assistant** designed to reduce manual note-taking and surface relevant historical context.
 
 ---
 
 ## What This Project Does
 
-- Captures live audio from the browser
-- Performs **real-time Hindi speech-to-text** using Vosk
-- Displays **partial and final transcripts** instantly
-- Sends the completed transcript to an LLM (Gemini) for **structured extraction**
-- Applies **strict trust and validation rules**
-- Stores **every session** for audit, replay, and debugging
-- Generates a **draft Hindi clinical report** for doctor review
+- **Real-Time ASR:** Captures live audio and converts Hindi speech to text using Vosk.
+- **Live Clinical Structuring:** Incrementally extracts symptoms, medications, and diagnosis *while* the consultation is happening using Gemini.
+- **Intelligent Suggestions:** Uses a Vector Database (ChromaDB) to suggest common diagnoses, tests, and medications based on similar past consultations.
+- **Hindi PDF Reports:** Generates a professional, Hindi-compatible PDF clinical report for the patient.
+- **Audit & Replay:** Stores every session, including raw audio/transcript, for full auditability.
 
 ---
 
@@ -23,283 +22,181 @@ It is a **documentation assistant** designed to reduce manual note-taking.
 
 ### High-Level Flow
 
-Browser Microphone
-        ↓ (WebSocket, PCM audio)
-FastAPI Server
-        ↓
-Vosk ASR (Hindi)
-        ↓
-Raw Transcript (Immutable)
-        ↓
-Gemini LLM (Parser Only)
-        ↓
-Trust & Validation Layer
-        ↓
-Structured Output / Draft Report
-        ↓
-Audit-First Storage
+```mermaid
+graph TD
+    Mic[Browser Microphone] -->|WebSocket Stream| Server[FastAPI Server]
+    Server -->|PCM Audio| Vosk[Vosk ASR (Hindi)]
+    Vosk -->|Raw Text| Incremental[Incremental LLM (Gemini)]
+    Incremental -->|JSON Updates| UI[Frontend Dashboard]
+    
+    subgraph "Post-Consultation"
+        Incremental -->|Final State| Vector[Vector Store (ChromaDB)]
+        Vector -->|Similarity Search| Suggestions[Case Suggestions]
+        Incremental -->|Structured Data| PDF[PDF Generator]
+    end
+
+```
 
 ## Architecture Layers
 
 ### 1. Frontend (Browser)
 
-**Files**
-- `templates/index.html`
-- `static/app.js`
-- `static/style.css`
+**Files:** `templates/index.html`, `static/app.js`, `static/style.css`
 
-**Responsibilities**
-- Capture microphone audio
-- Convert audio to 16-bit PCM @ 16 kHz
-- Stream audio via WebSocket
-- Display:
-  - live partial ASR text
-  - final transcript lines
-  - structured JSON
-  - generated clinical note
+* **Responsibilities:**
+* Captures microphone audio (16-bit PCM @ 16 kHz).
+* Displays live transcript, structured fields, and suggestions.
+* Renders a clean, modern UI with visual feedback for recording states.
 
-**Design Principle**
-> The frontend is a dumb renderer.  
-> No interpretation, no medical logic.
 
----
+* **Design Principle:** Dumb renderer. All logic resides on the backend.
 
 ### 2. Transport Layer (WebSocket)
 
-**File**
-- `app/api/websocket.py`
+**File:** `app/api/websocket.py`
 
-**Responsibilities**
-- Session creation (`session_id`)
-- Streaming audio → ASR
-- Emitting events to UI:
-  - `partial`
-  - `transcript`
-  - `structured`
-- Triggering post-processing on `stop`
+* **Responsibilities:**
+* Manages real-time bi-directional communication.
+* Coordinations the ASR stream and LLM updates.
+* Handles session finalization and triggers the suggestion engine.
 
----
+
 
 ### 3. Speech Recognition (ASR)
 
-**File**
-- `app/asr/vosk_adapter.py`
+**File:** `app/asr/vosk_adapter.py`
 
-**Technology**
-- Vosk Hindi model (`vosk-model-hi-0.22`)
+* **Technology:** Vosk (`vosk-model-hi-0.22`)
+* **Behavior:** Offline, privacy-first speech recognition. Emits partial (low latency) and final results.
 
-**Behavior**
-- Emits:
-  - partial hypotheses (low latency)
-  - finalized utterances (committed)
-- No speaker detection
-- No rewriting
-- No medical logic
+### 4. Incremental Structuring (LLM)
 
----
+**File:** `app/llm/incremental.py`
 
-## Raw Transcript (Ground Truth)
+* **Role:** Updates the clinical state (symptoms, meds, diagnosis) in real-time as the conversation progresses.
+* **Model:** Google Gemini (Flash/Pro).
+* **Constraints:** Strict JSON schema enforcement; Temperature 0.0 for deterministic output.
 
-This transcript:
+### 5. Vector Store & Suggestions
 
-- Is immutable  
-- Is never overwritten  
-- Acts as the single source of truth for all downstream logic  
+**Files:** `app/vectorstore/chroma_store.py`, `app/vectorstore/suggestions.py`
 
----
+* **Role:** Embeds finalized consultations into a local ChromaDB.
+* **Feature:** When a session ends, it queries the database for similar past cases to suggest likely diagnoses or missed tests based on historical data.
 
-## 5. LLM Normalization Layer
+### 6. Storage & Reporting
 
-**File**
-app/llm/gemini.py
+**File:** `app/storage/session_store.py`
 
-**Role**  
-Parse the raw transcript into structured clinical data.
-
-**Tasks**
-- Speaker classification (`patient / doctor / unknown`)
-- Symptom extraction (with duration)
-- Medication extraction (with dosage)
-- Diagnosis detection (explicit only)
-- Generate a short Hindi clinical report
-
-**Hard Constraints**
-- Temperature = `0.0`
-- Strict JSON schema
-- No markdown
-- No explanations
-- No assumptions
-
-The LLM is treated strictly as a **parser**, not an authority.
-
-
-## 6. Trust & Validation Layer
-
-**File**
-app/pipeline/trust.py
-
-markdown
-Copy code
-
-**Purpose**  
-Decide whether LLM output is allowed to be surfaced.
-
-**Rules**
-- Patient speech must exist
-- Doctor speech required for medications and diagnoses
-- Symptoms must be grounded in patient speech
-- Violations downgrade or block output
-
-**Decisions**
-- `use_llm` – full report allowed
-- `partial_llm` – symptoms only
-- `ignore_llm` – nothing shown
-
-Safety always wins over completeness.
-
----
-
-## 7. Evaluation & Normalization
-
-**Files**
-app/pipeline/normalize.py
-app/pipeline/evaluate.py
-
-
-**Role**
-- Wrap LLM output into a single evaluation record
-- Attach trust decisions and metadata
-- Produce an auditable result per session
-
----
-
-## 8. Persistence (Audit-First)
-
-**File**
-app/storage/session_store.py
-
-**Stored Per Session**
-- `raw_transcript.json`
-- `structured_output.json`
-- `metadata.json`
-
-**Properties**
-- Append-only
-- Date-partitioned
-- Human-readable JSON
-- No data is silently discarded
+* **Persistence:** Saves raw transcripts, structured JSON, and metadata in a date-partitioned file structure.
+* **PDF Generation:** Uses `reportlab` with custom font registration (`NotoSansDevanagari`) to correctly render Hindi characters in the final clinical report.
 
 ---
 
 ## Features
 
-- Real-time Hindi speech-to-text
-- Live partial transcript display
-- Strict LLM schema enforcement
-- Trust-gated clinical extraction
-- Draft Hindi OPD note generation
-- Full session audit trail
-- Safe and explicit failure modes
-
----
-
-## What This Project Is NOT
-
-- ❌ Not a diagnostic engine  
-- ❌ Not a prescription system  
-- ❌ Not an autonomous medical agent  
-- ❌ Not a certified medical device  
-
-Doctors remain the final authority.
+* **⚡ Real-time Transcription:** Low-latency Hindi speech-to-text.
+* **📝 Live Structuring:** Watch the "Symptoms" and "Meds" lists fill up as you speak.
+* **💡 Smart Suggestions:** "Based on 5 similar cases, 80% were diagnosed with Viral Fever."
+* **📄 Auto-PDF:** One-click generation of a print-ready OPD slip.
+* **🛡️ Audit Trail:** Immutable raw transcripts ensure nothing is lost.
 
 ---
 
 ## Installation
 
 ### 1. Clone the repository
+
 ```bash
-git clone https://github.com/samadrehan02/upgraded-waddle-llm
+git clone [https://github.com/samadrehan02/upgraded-waddle-llm](https://github.com/samadrehan02/upgraded-waddle-llm)
 cd upgraded-waddle-llm
+
 ```
+
 ### 2. Create and activate virtual environment
+
 ```bash
+# Windows
 python -m venv .venv
-source .venv/bin/activate    # Linux / macOS
-# OR
-.venv\Scripts\activate       # Windows
+.venv\Scripts\activate
+
+# Linux / macOS
+python3 -m venv .venv
+source .venv/bin/activate
+
 ```
+
 ### 3. Install dependencies
+
 ```bash
 pip install -r requirements.txt
+
 ```
+
 ### 4. Download Vosk Hindi model
 
-Download and extract:
+Download `vosk-model-hi-0.22` from the [Vosk Models page](https://alphacephei.com/vosk/models) and extract it to:
 
-vosk-model-hi-0.22
-Place it at:
-```bash
+```
 models/vosk/hi/vosk-model-hi-0.22/
-```
-### 5. Configure environment variables
-Create a .env file:
-```bash
 
-env
-ENV=dev
-GEMINI_API_KEY=your_api_key_here
-GEMINI_MODEL=gemini-3-flash-preview (or whichever you want, 2.5 Pro, and flash preview work best)
 ```
+
+### 5. Configure environment variables
+
+Create a `.env` file in the root directory:
+
+```env
+ENV=dev
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.0-flash-exp  # or gemini-1.5-flash
+
+```
+
 ## Running the Application
 
-Development (recommended):
+**Development (Hot Reload):**
 
 ```bash
 uvicorn main:app --reload
+
 ```
-Open in browser:
+
+**Production:**
 
 ```bash
-
-http://localhost:8000
-```
-Alternative (no auto-reload):
-
-```bash
-
 python main.py
+
 ```
+
+Access the dashboard at **`http://localhost:8000`**.
+
+---
+
 ## Project Structure
+
 ```bash
-
 .
-├── main.py
 ├── app/
-│   ├── api/
-│   ├── asr/
-│   ├── llm/
-│   ├── pipeline/
-│   ├── storage/
-│   ├── models.py
-│   └── config.py
-├── templates/
-├── static/
-├── models/
-├── data/
+│   ├── api/          # Endpoints & WebSocket logic
+│   ├── asr/          # Vosk adapter
+│   ├── llm/          # Gemini integration & incremental parsing
+│   ├── pipeline/     # Schema normalization
+│   ├── storage/      # File I/O and PDF generation
+│   └── vectorstore/  # ChromaDB & Suggestion engine
+├── models/           # Local ML models (Vosk)
+├── static/           # CSS, JS, and Fonts
+├── templates/        # HTML
+├── data/             # Session storage (created at runtime)
+├── main.py           # Entry point
 └── requirements.txt
+
 ```
-
-## Design Principles
-
-- Raw data is never overwritten
-
-- LLM output is never blindly trusted
-
-- Failures are explicit and visible
-
-- Safety over completeness
-
-- Auditability over convenience
 
 ## Status
-This project is a functional proof-of-concept with a stable, extensible architecture suitable for further hardening and productionization.
+
+This project is a functional proof-of-concept. It demonstrates a complete pipeline from audio ingestion to vector-backed clinical insights, suitable for further hardening and integration into hospital workflows.
+
+```
+
+```

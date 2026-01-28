@@ -46,6 +46,13 @@ async function startRecording() {
     structuredBox.innerHTML = "Waiting for structured data…";
     llmReportBox.textContent = "Waiting for clinical report…";
     transcriptCount.textContent = "0 lines";
+    suggestionsBox.innerHTML = `
+        <div class="empty-state">
+            <span class="material-icons">insights</span>
+            <p>Suggestions will appear after finalization</p>
+        </div>
+    `;
+    suggestionsCount.textContent = "0 cases";
 
     lineCount = 0;
     partialElement = null;
@@ -269,21 +276,105 @@ async function regenerateReport() {
 
     updateStatus("processing", "Regenerating…");
 
-    const res = await fetch(
-        `/sessions/${activeSessionId}/regenerate`,
-        { method: "POST" }
-    );
+    try {
+        const res = await fetch(
+            `/sessions/${activeSessionId}/regenerate`,
+            { method: "POST" }
+        );
 
-    const data = await res.json();
+        const data = await res.json();
 
-    llmReportBox.textContent = data.clinical_report || "";
+        llmReportBox.textContent = data.clinical_report || "";
 
-    if (pdfBtn && data.pdf) {
-        pdfBtn.style.display = "flex";
-        pdfBtn.onclick = () => window.open(data.pdf, "_blank");
+        if (pdfBtn && data.pdf) {
+            pdfBtn.style.display = "flex";
+            pdfBtn.onclick = () => window.open(data.pdf, "_blank");
+        }
+
+        updateStatus("ready", "Report updated");
+        
+        // NEW: Automatically fetch suggestions after report is generated
+        await fetchSuggestions();
+
+    } catch (e) {
+        console.error("Report generation failed:", e);
+        updateStatus("error", "Generation failed");
+    }
+}
+
+async function fetchSuggestions() {
+    if (!activeSessionId) return;
+
+    try {
+        const res = await fetch(`/sessions/${activeSessionId}/suggestions`);
+        if (!res.ok) return;
+
+        const data = await res.json();
+        renderSuggestions(data);
+    } catch (e) {
+        console.error("Failed to fetch suggestions:", e);
+    }
+}
+
+function renderSuggestions(data) {
+    suggestionsBox.innerHTML = "";
+    
+    // Update badge count
+    const count = data.based_on_cases || 0;
+    suggestionsCount.textContent = `${count} similar cases`;
+
+    if (count === 0) {
+        suggestionsBox.innerHTML = `
+            <div class="empty-state">
+                <span class="material-icons">search_off</span>
+                <p>No similar past cases found.</p>
+            </div>`;
+        return;
     }
 
-    updateStatus("ready", "Report updated");
+    // Helper to create metric cards
+    const createMetric = (title, items, icon) => {
+        if (!items || items.length === 0) return null;
+
+        const container = document.createElement("div");
+        container.className = "suggestion-group";
+
+        const header = document.createElement("div");
+        header.className = "suggestion-header";
+        header.innerHTML = `<span class="material-icons">${icon}</span> ${title}`;
+
+        const list = document.createElement("div");
+        list.className = "suggestion-list";
+
+        items.forEach(item => {
+            const row = document.createElement("div");
+            row.className = "suggestion-item";
+            
+            // Calculate percentage based on total cases found
+            const percent = Math.round((item.count / count) * 100);
+            
+            row.innerHTML = `
+                <span class="sug-name">${item.name}</span>
+                <span class="sug-bar-container">
+                    <div class="sug-bar" style="width: ${percent}%"></div>
+                </span>
+                <span class="sug-percent">${percent}%</span>
+            `;
+            list.appendChild(row);
+        });
+
+        container.appendChild(header);
+        container.appendChild(list);
+        return container;
+    };
+
+    const diagParams = createMetric("Common Diagnosis", data.diagnosis, "medical_services");
+    const testParams = createMetric("Common Tests", data.tests, "biotech");
+    const medParams = createMetric("Common Rx", data.medications, "medication");
+
+    if (diagParams) suggestionsBox.appendChild(diagParams);
+    if (testParams) suggestionsBox.appendChild(testParams);
+    if (medParams) suggestionsBox.appendChild(medParams);
 }
 
 let autoRegenDone = false;

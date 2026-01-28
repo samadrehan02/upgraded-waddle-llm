@@ -14,6 +14,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.enums import TA_LEFT
 from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 BASE_DIR = Path("data/sessions")
 
@@ -39,7 +41,19 @@ def store_metadata(session_id: str, metadata: Dict[str, Any]) -> None:
     path = _session_dir(session_id) / "metadata.json"
     path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
 
-
+def get_suggestions(session_id: str) -> Dict[str, Any]:
+    """
+    Retrieve the stored suggestions for a given session.
+    Returns empty dict if file doesn't exist yet.
+    """
+    path = _session_dir(session_id) / "suggestions.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    
 def _render_section(
     story: list,
     title: str,
@@ -65,12 +79,24 @@ def store_pdf_report(
     session_dir = _session_dir(session_id)
     pdf_path = session_dir / "clinical_report.pdf"
 
+    # 1. REGISTER HINDI FONT
+    font_path = "static/fonts/NotoSansDevanagari-Regular.ttf"
+    font_name = 'HindiFont'
+    
+    try:
+        pdfmetrics.registerFont(TTFont(font_name, font_path))
+    except Exception as e:
+        print(f"Warning: Could not load {font_path}. Falling back to Helvetica. Error: {e}")
+        font_name = 'Helvetica'
+
     styles = getSampleStyleSheet()
     story: list = []
 
+    # 2. UPDATE STYLES TO USE THE REGISTERED FONT
     title_style = ParagraphStyle(
         "Title",
         parent=styles["Heading1"],
+        fontName=font_name,  # <--- Essential for Hindi
         alignment=TA_LEFT,
         spaceAfter=12,
     )
@@ -78,11 +104,16 @@ def store_pdf_report(
     section_style = ParagraphStyle(
         "Section",
         parent=styles["Heading3"],
+        fontName=font_name,  # <--- Essential for Hindi
         spaceBefore=12,
         spaceAfter=6,
     )
 
-    body_style = styles["Normal"]
+    body_style = ParagraphStyle(
+        "Body",
+        parent=styles["Normal"],
+        fontName=font_name,  # <--- Essential for Hindi
+    )
 
     # ---------------- TITLE ----------------
     story.append(Paragraph("CLINICAL CONSULTATION NOTE", title_style))
@@ -106,7 +137,7 @@ def store_pdf_report(
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
                 ("BACKGROUND", (0, 0), (0, -1), colors.whitesmoke),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("FONT", (0, 0), (-1, -1), "Helvetica"),
+                ("FONT", (0, 0), (-1, -1), font_name),  # <--- Use the variable, not the string literal
             ]
         )
     )
@@ -203,7 +234,8 @@ def store_structured_state(session_id: str, structured_state: dict):
     path = _session_dir(session_id) / "structured_state.json"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(structured_state, f, ensure_ascii=False, indent=2)
-        
+
+
 def store_suggestions(session_id: str, suggestions: Dict[str, Any]) -> None:
     path = _session_dir(session_id) / "suggestions.json"
     path.write_text(json.dumps(suggestions, ensure_ascii=False, indent=2), encoding="utf-8")

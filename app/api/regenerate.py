@@ -4,7 +4,7 @@ import asyncio
 
 from app.storage.session_registry import get_session
 from app.llm.gemini import generate_report_from_state
-from app.storage.session_store import store_pdf_report
+from app.storage.session_store import store_pdf_report, get_suggestions
 
 router = APIRouter(prefix="/sessions", tags=["regenerate"])
 
@@ -47,3 +47,11 @@ async def regenerate_report(session_id: str):
         "pdf": f"/data/sessions/{session.session_date}/{session.session_id}/clinical_report.pdf",
         "clinical_report": clinical_report,
     }
+
+@router.get("/{session_id}/suggestions")
+async def fetch_suggestions(session_id: str):
+    """
+    Return the vector-store suggestions (similar cases) for the session.
+    """
+    data = get_suggestions(session_id)
+    return data
