@@ -108,10 +108,10 @@ graph TD
 ### 1. Clone the repository
 
 ```bash
-git clone [https://github.com/samadrehan02/upgraded-waddle-llm](https://github.com/samadrehan02/upgraded-waddle-llm)
+git clone https://github.com/samadrehan02/upgraded-waddle-llm
 cd upgraded-waddle-llm
-
 ```
+
 
 ### 2. Create and activate virtual environment
 
