@@ -172,6 +172,110 @@ python main.py
 Access the dashboard at **`http://localhost:8000`**.
 
 ---
+## How to Test
+
+There are two supported ways to test the system.
+
+### 1. Real-time microphone input
+
+Use a physical microphone and speak naturally.
+
+* Read the script aloud as if you are a real patient.
+* This is useful for validating end-to-end, real-world behavior (ASR, timing, pauses, noise).
+
+### 2. Virtual audio cable + generated audio (recommended)
+
+This method is better for:
+
+* Extended testing
+* Reproducible runs
+* Noisy environments
+* Automated or regression testing
+
+You generate a Hindi TTS audio file and route it into the system using a virtual audio cable.
+
+#### Steps
+
+1. Use a virtual audio cable (e.g. VB-Cable).
+2. Generate a WAV file using the script below.
+3. Set the **Virtual Cable Output** as the microphone input in Chrome.
+4. Play the generated audio file.
+
+#### Example: Hindi TTS test script
+
+```bash
+import asyncio
+import edge_tts
+from pydub import AudioSegment
+from pathlib import Path
+
+VOICE = "hi-IN-MadhurNeural"
+PAUSE_MS = 1000
+OUTPUT_WAV = "test_consultation3.wav"
+
+SCRIPT = [
+    "मेरा नाम राहुल है",
+    "मैं अट्ठाइस साल का हूं",
+    "पिछले तीन दिन से तेज बुखार आ रहा है",
+    "सिर और आंखों के पीछे बहुत दर्द है",
+    "शरीर और जोड़ों में दर्द हो रहा है",
+    "उल्टी जैसा लग रहा है और कमजोरी है",
+    "आज दोपहर शरीर का तापमान एक सौ दो डिग्री था",
+    "ब्लड प्रेशर एक सौ बीस अस्सी है",
+    "लक्षण डेंगू से मिलते जुलते लग रहे हैं",
+    "प्लेटलेट्स कम होने का खतरा हो सकता है",
+    "सीबीसी और प्लेटलेट काउंट कराना होगा",
+    "डेंगू एनएस1 एंटीजन टेस्ट करवाइए",
+    "अभी ज्यादा तरल पदार्थ लें",
+    "दर्द या बुखार के लिए केवल पैरासिटामोल लें",
+    "खून की जांच रिपोर्ट आने तक पूरा आराम करें",
+]
+
+async def generate_tts():
+    segments = []
+    silence = AudioSegment.silent(duration=PAUSE_MS)
+
+    for i, sentence in enumerate(SCRIPT):
+        tmp_mp3 = Path(f"_seg_{i}.mp3")
+
+        communicate = edge_tts.Communicate(
+            text=sentence,
+            voice=VOICE,
+            rate="+0%",
+            volume="+0%",
+        )
+
+        await communicate.save(tmp_mp3)
+
+        audio = AudioSegment.from_file(tmp_mp3, format="mp3")
+        audio = audio.set_frame_rate(16000).set_channels(1)
+
+        segments.append(audio)
+        segments.append(silence)
+
+        tmp_mp3.unlink(missing_ok=True)
+
+    final_audio = sum(segments)
+    final_audio.export(
+        OUTPUT_WAV,
+        format="wav",
+        parameters=["-ac", "1", "-ar", "16000"],
+    )
+
+    print(f"✅ Generated: {OUTPUT_WAV}")
+
+if __name__ == "__main__":
+    asyncio.run(generate_tts())
+```
+
+#### Notes
+
+* Output audio is mono, 16 kHz (speech-model friendly).
+* Pauses between sentences simulate natural conversation.
+* Using TTS ensures consistent, repeatable test inputs.
+
+---
+
 
 ## Project Structure
 
