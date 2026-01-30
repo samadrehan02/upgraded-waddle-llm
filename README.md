@@ -267,7 +267,9 @@ async def generate_tts():
 if __name__ == "__main__":
     asyncio.run(generate_tts())
 ```
+Run this script in a python file, it will save the generated audio in the project root.
 
+In the UI click, start recording, and play the audio.
 #### Notes
 
 * Output audio is mono, 16 kHz (speech-model friendly).
